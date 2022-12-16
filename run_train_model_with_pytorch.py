@@ -57,7 +57,7 @@ def create_train_data(name, windows):
     }
 
 def train_red_ball_model(name, x_data, y_data):
-    # def __init__(self, batch_size, n_class, ball_num, w_size, embedding_size, words_size, hidden_size, layer_size)
+    # self, batch_size, n_class, ball_num, w_size, embedding_size, words_size, hidden_size, layer_size
     m_args = model_args[name]
     if name not in ["pls"]:
         x_data = x_data - 1
@@ -79,7 +79,7 @@ def train_red_ball_model(name, x_data, y_data):
             x = x.to(device)
             y = y.to(device)
             optimizer.zero_grad()
-            viterbi_score, viterbi_sequence, loss = model(x, y, m_args["model_args"]["sequence_len"])
+            outputs, loss, pred_sequence, viterbi_score = model(x, y, m_args["model_args"]["sequence_len"])
             loss.backward()
             optimizer.step()
         logger.info("第{}轮训练结束，耗时: {}s".format(epoch+1, time.time()-start_time))
