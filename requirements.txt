@@ -1,0 +1,11 @@
+pytorch-gpu
+pytorch-crf
+requests
+keras
+beautifulsoup4
+pandas
+numpy
+lxml
+loguru
+grpcio
+protobuf
