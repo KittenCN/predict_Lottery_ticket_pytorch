@@ -1,122 +1,104 @@
 # -*- coding:utf-8 -*-
 """
-Author: BigCat
-Modifier: KittenCN
+Author: KittenCN
 """
-import tensorflow as tf
-tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
-from tensorflow_addons.text.crf import crf_decode, crf_log_likelihood
 
-# 关闭eager模式
-tf.compat.v1.disable_eager_execution()
-tf.compat.v1.experimental.output_all_intermediates(True)
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import torch.utils.data as Data
+import numpy as np
+from torch.utils.data import  Dataset
 
-gpus = tf.config.list_physical_devices("GPU")
-if gpus:
-    tf.config.experimental.set_memory_growth(gpus[0],True)
+class PositionalEncoding(nn.Module):
+    def __init__(self, d_model, dropout_prob=0.1, max_len=5000):
+        super(PositionalEncoding, self).__init__()
+        self.dropout = nn.Dropout(p=dropout_prob)
+
+        pe = torch.zeros(max_len, d_model)
+        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-np.log(10000.0) / d_model))
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        pe = pe.unsqueeze(0).transpose(0, 1)
+        self.register_buffer('pe', pe)
+
+    def forward(self, x):
+        x = x + self.pe[:x.size(0), :]
+        return self.dropout(x)
 
 
-class LstmWithCRFModel(object):
-    """ lstm + crf解码模型
-    """
+class Transformer_Model(nn.Module):
+    def __init__(self, input_size, hidden_size, num_layers, num_heads, dropout_prob):
+        super(Transformer_Model, self).__init__()
 
-    def __init__(self, batch_size, n_class, ball_num, w_size, embedding_size, words_size, hidden_size, layer_size):
-        self._inputs = tf.keras.layers.Input(
-            shape=(w_size, ball_num), batch_size=batch_size, name="inputs"
+        self.embedding = nn.Embedding(input_size, hidden_size)
+        self.positional_encoding = PositionalEncoding(hidden_size)
+        self.transformer_layer = nn.TransformerEncoderLayer(d_model=hidden_size, nhead=num_heads, dropout=dropout_prob)
+        self.transformer_encoder = nn.TransformerEncoder(
+            self.transformer_layer,
+            num_layers)
+        self.linear = nn.Linear(hidden_size, 1)
+
+    def forward(self, x):
+        embedded = self.embedding(x)
+        positional_encoded = self.positional_encoding(embedded)
+        transformer_encoded = self.transformer_encoder(positional_encoded)
+        linear_out = self.linear(transformer_encoded.mean(dim=1))
+        return linear_out.squeeze(1)
+
+def train_model(model, data, labels, num_epochs, batch_size, learning_rate, device):
+    dataset = Data.TensorDataset(data, labels)
+    dataloader = Data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    criterion = nn.MSELoss()
+
+    for epoch in range(num_epochs):
+        epoch_loss = 0.0
+        for batch_data, batch_labels in dataloader:
+            batch_data = batch_data.to(device)
+            batch_labels = batch_labels.to(device)
+            optimizer.zero_grad()
+            outputs = model(batch_data)
+            loss = criterion(outputs, batch_labels)
+            loss.backward()
+            optimizer.step()
+            epoch_loss += loss.item() * batch_data.shape[0]
+        epoch_loss /= len(dataset)
+        print('Epoch [{}/{}], Loss: {:.4f}'.format(epoch+1, num_epochs, epoch_loss))
+
+
+# 定义数据集类
+class MyDataset(Dataset):
+    def __init__(self, data):
+        self.data = data
+    
+    def __len__(self):
+        return len(self.data) - 1
+    
+    def __getitem__(self, idx):
+        # 将每组数据分为输入序列和目标序列
+        x = self.data[idx]
+        y = self.data[idx+1]
+        return x, y
+
+# 定义 Transformer 模型类
+class TransformerModel(nn.Module):
+    def __init__(self, input_size, output_size, hidden_size=256, num_layers=4, num_heads=4, dropout=0.1):
+        super().__init__()
+        self.transformer = nn.Transformer(
+            d_model=input_size,
+            nhead=num_heads,
+            num_encoder_layers=num_layers,
+            num_decoder_layers=num_layers,
+            dim_feedforward=hidden_size,
+            dropout=dropout
         )
-        self._tag_indices = tf.keras.layers.Input(
-            shape=(ball_num, ), batch_size=batch_size, dtype=tf.int32, name="tag_indices"
-        )
-        self._sequence_length = tf.keras.layers.Input(
-            shape=(), batch_size=batch_size, dtype=tf.int32, name="sequence_length"
-        )
-        # 构建特征抽取
-        embedding = tf.keras.layers.Embedding(words_size, embedding_size)(self._inputs)
-        first_lstm = tf.convert_to_tensor(
-            [tf.keras.layers.LSTM(hidden_size)(embedding[:, :, i, :]) for i in range(ball_num)]
-        )
-        first_lstm = tf.transpose(first_lstm, perm=[1, 0, 2])
-        second_lstm = None
-        for _ in range(layer_size):
-            second_lstm = tf.keras.layers.LSTM(hidden_size, return_sequences=True)(first_lstm)
-        self._outputs = tf.keras.layers.Dense(n_class)(second_lstm)
-        # 构建损失函数
-        self._log_likelihood, self._transition_params = crf_log_likelihood(
-            self._outputs, self._tag_indices, self._sequence_length
-        )
-        self._loss = tf.reduce_sum(-self._log_likelihood)
-        #  构建预测
-        self._pred_sequence, self._viterbi_score = crf_decode(
-            self._outputs, self._transition_params, self._sequence_length
-        )
-
-    @property
-    def inputs(self):
-        return self._inputs
-
-    @property
-    def tag_indices(self):
-        return self._tag_indices
-
-    @property
-    def sequence_length(self):
-        return self._sequence_length
-
-    @property
-    def outputs(self):
-        return self._outputs
-
-    @property
-    def transition_params(self):
-        return self._transition_params
-
-    @property
-    def loss(self):
-        return self._loss
-
-    @property
-    def pred_sequence(self):
-        return self._pred_sequence
-
-
-class SignalLstmModel(object):
-    """ 单向lstm序列模型
-    """
-
-    def __init__(self, batch_size, n_class, w_size, embedding_size, hidden_size, outputs_size, layer_size):
-        self._inputs = tf.keras.layers.Input(
-            shape=(w_size, ), batch_size=batch_size, dtype=tf.int32, name="inputs"
-        )
-        self._tag_indices = tf.keras.layers.Input(
-            shape=(n_class, ), batch_size=batch_size, dtype=tf.float32, name="tag_indices"
-        )
-        embedding = tf.keras.layers.Embedding(outputs_size, embedding_size)(self._inputs)
-        lstm = tf.keras.layers.LSTM(hidden_size, return_sequences=True)(embedding)
-        for _ in range(layer_size):
-            lstm = tf.keras.layers.LSTM(hidden_size, return_sequences=True)(lstm)
-        final_lstm = tf.keras.layers.LSTM(hidden_size, recurrent_dropout=0.2)(lstm)
-        self._outputs = tf.keras.layers.Dense(outputs_size, activation="softmax")(final_lstm)
-        # 构建损失函数
-        self._loss = - tf.reduce_sum(self._tag_indices * tf.math.log(self._outputs))
-        # 预测结果
-        self._pred_label = tf.argmax(self.outputs, axis=1)
-
-    @property
-    def inputs(self):
-        return self._inputs
-
-    @property
-    def tag_indices(self):
-        return self._tag_indices
-
-    @property
-    def outputs(self):
-        return self._outputs
-
-    @property
-    def loss(self):
-        return self._loss
-
-    @property
-    def pred_label(self):
-        return self._pred_label
+        self.linear = nn.Linear(input_size, output_size)
+    
+    def forward(self, x):
+        x = x.permute(1, 0, 2) # 将输入序列转置为 (seq_len, batch_size, input_size)
+        x = self.transformer(x, x) # 使用 Transformer 进行编码和解码
+        x = x.permute(1, 0, 2) # 将输出序列转置为 (batch_size, seq_len, input_size)
+        x = self.linear(x) # 对输出进行线性变换
+        return x
