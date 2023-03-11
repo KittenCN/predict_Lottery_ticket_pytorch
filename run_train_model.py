@@ -2,11 +2,8 @@
 """
 Author: KittenCN
 """
-import datetime
 import os
-import random
 import time
-import json
 import argparse
 import numpy as np
 import pandas as pd
@@ -21,6 +18,7 @@ import modeling
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from common import get_data_run
+from tqdm import tqdm
 
 
 warnings.filterwarnings('ignore')
@@ -29,19 +27,19 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 parser = argparse.ArgumentParser()
 parser.add_argument('--name', default="kl8", type=str, help="选择训练数据")
 parser.add_argument('--windows_size', default='1', type=str, help="训练窗口大小,如有多个，用'，'隔开")
-parser.add_argument('--red_epochs', default=100, type=int, help="红球训练轮数")
+parser.add_argument('--red_epochs', default=1000, type=int, help="红球训练轮数")
 parser.add_argument('--blue_epochs', default=1, type=int, help="蓝球训练轮数")
 parser.add_argument('--batch_size', default=32, type=int, help="集合数量")
 parser.add_argument('--predict_pro', default=0, type=int, help="更新batch_size")
 parser.add_argument('--epochs', default=1, type=int, help="训练轮数(红蓝球交叉训练)")
-parser.add_argument('--cq', default=0, type=int, help="是否使用出球顺序，0：不使用（即按从小到大排序），1：使用")
+parser.add_argument('--cq', default=1, type=int, help="是否使用出球顺序，0：不使用（即按从小到大排序），1：使用")
 parser.add_argument('--download_data', default=1, type=int, help="是否下载数据")
 args = parser.parse_args()
 
 pred_key = {}
 ori_data = None
 save_epoch = 10
-save_interval = 600
+save_interval = 10
 last_save_time = time.time()
 
 def create_train_data(name, windows, dataset=0):
@@ -100,28 +98,18 @@ def train_red_ball_model(name, dataset):
     syspath = model_path + model_args[args.name]["pathname"]['name'] + str(m_args["model_args"]["windows_size"]) + model_args[args.name]["subpath"]['red']
     if not os.path.exists(syspath):
         os.makedirs(syspath)
-    # data_len = dataset.data.shape[0]
-    # if len(x_data) % m_args["model_args"]["batch_size"] != 0:
-    #         diff = m_args["model_args"]["batch_size"] - (len(x_data) % m_args["model_args"]["batch_size"])
-    #         while diff > 0:
-    #             random_index = np.random.randint(0, data_len)
-    #             x_data = np.append(x_data, [x_data[random_index]], axis=0)
-    #             y_data = np.append(y_data, [y_data[random_index]], axis=0)
-    #             diff -= 1
     logger.info("标签数据维度: {}".format(dataset.data.shape))
 
-    dataloader = DataLoader(dataset, batch_size=model_args[args.name]["model_args"]["batch_size"], shuffle=True)
+    dataloader = DataLoader(dataset, batch_size=model_args[args.name]["model_args"]["batch_size"], shuffle=False)
 
     # 定义模型和优化器
     model = modeling.TransformerModel(input_size=20, output_size=20).to(device)
     if os.path.exists("{}red_ball_model_pytorch.ckpt".format(syspath)):
-        # saver = tf.compat.v1.train.Saver()
-        # saver.restore(sess, "{}red_ball_model.ckpt".format(syspath))
         model.load_state_dict(torch.load("{}red_ball_model_pytorch.ckpt".format(syspath)))
         logger.info("已加载红球模型！")
     criterion = nn.MSELoss()
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
-
+    optimizer = optim.Adam(model.parameters(), lr=0.1)
+    pbar = tqdm(range(model_args[args.name]["model_args"]["red_epochs"]))
     for epoch in range(model_args[args.name]["model_args"]["red_epochs"]):
         running_loss = 0.0
         for batch in dataloader:
@@ -130,16 +118,20 @@ def train_red_ball_model(name, dataset):
             x = x.to(device)
             y = y.to(device)
             x = x.unsqueeze(1) # 将输入序列的最后一维扩展为 1
+            y = y.unsqueeze(1)
             y_pred = model(x.float())
             loss = criterion(y_pred, y.float())
             loss.backward()
             optimizer.step()
-            running_loss += loss.item() * x.size(0)
-        print(f"Epoch {epoch+1}: Loss = {running_loss / len(dataset):.4f}")
+            # running_loss += loss.item() * x.size(0)
+        # print(f"Epoch {epoch+1}: Loss = {running_loss / len(dataset):.4f}")
+        pbar.set_description("Epoch {}/{} Loss: {:.4f}".format(epoch, model_args[args.name]["model_args"]["red_epochs"], loss.item()))
+        pbar.update(1)
         if (epoch + 1) % save_epoch == 0:
             if time.time() - last_save_time > save_interval:
                 last_save_time = time.time()
                 torch.save(model.state_dict(), "{}{}_pytorch.{}".format(syspath, red_ball_model_name, extension))
+    pbar.close()
     torch.save(model.state_dict(), "{}{}_pytorch.{}".format(syspath, red_ball_model_name, extension))
     logger.info("【{}】红球模型训练完成!".format(name_path[name]["name"]))
 
@@ -158,24 +150,17 @@ def action(name):
     train_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1)
     for i in range(args.epochs):
         if model_args[name]["model_args"]["red_epochs"] > 0:
-            # tf.compat.v1.reset_default_graph()  # 重置网络图
             logger.info("开始训练【{}】红球模型...".format(name_path[name]["name"]))
             start_time = time.time()
-            # train_red_ball_model(name, x_data=train_data["red"]["x_data"], y_data=train_data["red"]["y_data"])
             train_red_ball_model(name, dataset=train_data)
             logger.info("训练耗时: {:.4f}".format(time.time() - start_time))
 
         if name not in ["pls", "kl8"] and model_args[name]["model_args"]["blue_epochs"] > 0:
-            # tf.compat.v1.reset_default_graph()  # 重置网络图
-
             logger.info("开始训练【{}】蓝球模型...".format(name_path[name]["name"]))
             start_time = time.time()
             train_blue_ball_model(name, x_data=train_data["blue"]["x_data"], y_data=train_data["blue"]["y_data"])
             logger.info("训练耗时: {:.4f}".format(time.time() - start_time))
 
-        # 保存预测关键结点名
-        # with open("{}/{}".format(model_path + model_args[args.name]["pathname"]['name'] + str(model_args[args.name]["model_args"]["windows_size"]), pred_key_name), "w") as f:
-        #     json.dump(pred_key, f)
 
 def run(name, windows_size):
     """ 执行训练
@@ -189,74 +174,7 @@ def run(name, windows_size):
         for size in windows_size:
             model_args[name]["model_args"]["windows_size"] = int(size)
             action(name)
-            filename = datetime.datetime.now().strftime('%Y%m%d')
-            filepath = "{}{}/".format(predict_path, args.name)
-            fileadd = "{}{}{}".format(filepath, filename, ".csv")
-            if args.predict_pro == 0 and int(time.strftime("%H", time.localtime())) >=18 and os.path.exists(fileadd) == False:
-                logger.info("开始预测【{}】...".format(name_path[name]["name"]))
-                _tmpRedEpochs =  model_args[args.name]["model_args"]["red_epochs"]
-                _tmpBlueEpochs = model_args[args.name]["model_args"]["blue_epochs"]
-                _tmpBatchSize = model_args[args.name]["model_args"]["batch_size"]
-                if model_args[args.name]["model_args"]["red_epochs"] >= 1:
-                    model_args[args.name]["model_args"]["red_epochs"] = 1
-                    args.red_eopchs = 1
-                if model_args[args.name]["model_args"]["blue_epochs"] >= 1:
-                    model_args[args.name]["model_args"]["blue_epochs"] = 1
-                    args.blue_epochs = 1
-                model_args[args.name]["model_args"]["batch_size"] = 1
-                args.batch_size = 1
-                # init()
-                # setMiniargs(args)
-                for w_size in windows_size:
-                    model_args[name]["model_args"]["windows_size"] = int(w_size)
-                    train_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"])
-                    if model_args[name]["model_args"]["red_epochs"] > 0:
-                        # tf.compat.v1.reset_default_graph()  # 重置网络图
-                        logger.info("开始训练【{}】红球模型...".format(name_path[name]["name"]))
-                        start_time = time.time()
-                        train_red_ball_model(name, x_data=train_data["red"]["x_data"], y_data=train_data["red"]["y_data"])
-                        logger.info("训练耗时: {:.4f}".format(time.time() - start_time))
-
-                    if name not in ["pls", "kl8"] and model_args[name]["model_args"]["blue_epochs"] > 0:
-                        # tf.compat.v1.reset_default_graph()  # 重置网络图
-
-                        logger.info("开始训练【{}】蓝球模型...".format(name_path[name]["name"]))
-                        start_time = time.time()
-                        train_blue_ball_model(name, x_data=train_data["blue"]["x_data"], y_data=train_data["blue"]["y_data"])
-                        logger.info("训练耗时: {:.4f}".format(time.time() - start_time))
-
-                    # 保存预测关键结点名
-                    with open("{}/{}".format(model_path + model_args[args.name]["pathname"]['name'] + str(model_args[args.name]["model_args"]["windows_size"]), pred_key_name), "w") as f:
-                        json.dump(pred_key, f)
-
-                    # predict_tf.compat.v1.reset_default_graph()
-                    # red_graph = predict_tf.compat.v1.Graph()
-                    # blue_graph = predict_tf.compat.v1.Graph()
-                    # pred_key_d = {}
-                    # red_sess = predict_tf.compat.v1.Session(graph=red_graph)
-                    # blue_sess = predict_tf.compat.v1.Session(graph=blue_graph)
-                    # current_number = get_current_number(args.name)
-                    # run_predict(int(w_size))
-                    # _data, _title = predict_run(args.name)
-                # df = pd.DataFrame(_data, columns=_title)
-                # if not os.path.exists(filepath):
-                #     os.makedirs(filepath)
-                # df.to_csv(fileadd, encoding="utf-8",index=False)
-
-                model_args[args.name]["model_args"]["red_epochs"] = _tmpRedEpochs
-                args.red_epochs = _tmpRedEpochs
-                model_args[args.name]["model_args"]["blue_epochs"] = _tmpBlueEpochs
-                args.blue_epochs = _tmpBlueEpochs
-                model_args[args.name]["model_args"]["batch_size"] = _tmpBatchSize
-                args.batch_size = _tmpBatchSize
-            if args.download_data == 1 and args.predict_pro == 0 and int(time.strftime("%H", time.localtime())) >=23 and os.path.exists(fileadd):
-                print("正在创建【{}】数据集...".format(name_path[args.name]["name"]))
-                get_data_run(name=args.name, cq=args.cq)
-
-    epochs = model_args[args.name]["model_args"]["red_epochs"]
-    if epochs == 0:
-        epochs = model_args[args.name]["model_args"]["blue_epochs"]
-    logger.info("总耗时: {:.4f}, 平均效率：{:.4f}".format(time.time() - total_start_time, epochs / ((time.time() - total_start_time) / 3600)))
+    logger.info("训练总耗时: {:.4f}".format(time.time() - total_start_time))
 
 if __name__ == '__main__':
     list_windows_size = args.windows_size.split(",")
