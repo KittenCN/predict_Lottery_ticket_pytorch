@@ -39,7 +39,7 @@ args = parser.parse_args()
 pred_key = {}
 ori_data = None
 save_epoch = 10
-save_interval = 10
+save_interval = 60
 last_save_time = time.time()
 
 def create_train_data(name, windows, dataset=0, ball_type="red"):
@@ -113,7 +113,8 @@ def train_ball_model(name, dataset, sub_name="红球"):
         model.load_state_dict(torch.load("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)))
         logger.info("已加载{}模型！".format(sub_name))
     criterion = nn.MSELoss()
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    optimizer = optim.Adam(model.parameters(), lr=0.001, weight_decay=0.0001)
+    lr_scheduler=modeling.CustomSchedule(20, optimizer=optimizer)
     pbar = tqdm(range(model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]))
     for epoch in range(model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]):
         running_loss = 0.0
@@ -125,6 +126,7 @@ def train_ball_model(name, dataset, sub_name="红球"):
             y_pred = model(x.float())
             loss = criterion(y_pred, y.float())
             loss.backward()
+            lr_scheduler.step()
             optimizer.step()
             running_loss += loss.item() * x.size(0)
         # print(f"Epoch {epoch+1}: Loss = {running_loss / len(dataset):.4f}")

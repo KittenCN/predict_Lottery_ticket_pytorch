@@ -67,6 +67,22 @@ def train_model(model, data, labels, num_epochs, batch_size, learning_rate, devi
         epoch_loss /= len(dataset)
         print('Epoch [{}/{}], Loss: {:.4f}'.format(epoch+1, num_epochs, epoch_loss))
 
+class CustomSchedule(object):
+    def __init__(self, d_model, warmup_steps=4000, optimizer=None):
+        super(CustomSchedule, self).__init__()
+        self.d_model = torch.tensor(d_model, dtype=torch.float32)
+        self.warmup_steps = warmup_steps
+        self.optimizer = optimizer
+        self.steps = 1
+    
+    def step(self):
+        arg1 = self.steps ** -0.5
+        arg2 = self.steps * (self.warmup_steps ** -1.5)
+        self.steps += 1
+        lr = (self.d_model ** -0.5) * min(arg1, arg2)
+        for param_group in self.optimizer.param_groups:
+            param_group['lr'] = lr
+        return lr
 
 # 定义数据集类
 class MyDataset(Dataset):
