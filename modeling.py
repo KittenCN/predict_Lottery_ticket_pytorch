@@ -72,7 +72,6 @@ def train_model(model, data, labels, num_epochs, batch_size, learning_rate, devi
 class MyDataset(Dataset):
     def __init__(self, data, windows, cut_num):
         tmp = []
-        windows -= 1
         for i in range(len(data) - windows):
             if cut_num > 0:
                 sub_data = data[i:(i+windows+1), :cut_num]
@@ -86,8 +85,8 @@ class MyDataset(Dataset):
     
     def __getitem__(self, idx):
         # 将每组数据分为输入序列和目标序列
-        x = self.data[idx]
-        y = self.data[idx+1]
+        x = self.data[idx][1:]
+        y = self.data[idx][0]
         return x, y
 
 # 定义 Transformer 模型类
@@ -109,5 +108,5 @@ class TransformerModel(nn.Module):
         x = self.transformer(x, x) # 使用 Transformer 进行编码和解码
         x = x.permute(1, 0, 2) # 将输出序列转置为 (batch_size, seq_len, input_size)
         x = self.linear(x) # 对输出进行线性变换
-        # x = x[:, -1, :]
+        x = x[:, -1, :]
         return x

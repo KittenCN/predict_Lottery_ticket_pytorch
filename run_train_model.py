@@ -26,7 +26,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--name', default="kl8", type=str, help="选择训练数据")
-parser.add_argument('--windows_size', default='1', type=str, help="训练窗口大小,如有多个，用'，'隔开")
+parser.add_argument('--windows_size', default='3', type=str, help="训练窗口大小,如有多个，用'，'隔开")
 parser.add_argument('--red_epochs', default=1000, type=int, help="红球训练轮数")
 parser.add_argument('--blue_epochs', default=1, type=int, help="蓝球训练轮数")
 parser.add_argument('--batch_size', default=32, type=int, help="集合数量")
@@ -64,7 +64,6 @@ def create_train_data(name, windows, dataset=0, ball_type="red"):
         logger.info("训练数据已加载! ")
 
     data = data.iloc[:, 2:].values
-    logger.info("训练集数据维度: {}".format(data.shape))
     cut_num = model_args[name]["model_args"]["red_sequence_len"]
     if dataset == 0:
         x_data, y_data = [], []
@@ -86,6 +85,7 @@ def create_train_data(name, windows, dataset=0, ball_type="red"):
             dataset = modeling.MyDataset(data, windows, cut_num)
         else:
             dataset = modeling.MyDataset(data, windows, cut_num * -1)
+        logger.info("训练集数据维度: {}".format(dataset.data.shape))
         return dataset
 
 
