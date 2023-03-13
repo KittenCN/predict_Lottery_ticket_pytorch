@@ -67,6 +67,9 @@ def get_current_number(name):
     return current_num
 
 def spider_cq(name="kl8", start=1, end=999999, mode="train", windows_size=0):
+    syspath = name_path[name]["path"]
+    if not os.path.exists(syspath):
+        os.makedirs(syspath)
     if name == "kl8" and mode == "train":
         url = "https://data.917500.cn/kl81000_cq_asc.txt"
         r = requests.get(url, headers = {'User-agent': 'chrome'})
@@ -86,10 +89,10 @@ def spider_cq(name="kl8", start=1, end=999999, mode="train", windows_size=0):
                 item[u"红球_{}".format(i)] = line[i + 1]
             data.append(item)
         df = pd.DataFrame(data)
-        df.to_csv("{}{}".format(name_path[name]["path"], data_cq_file_name), encoding="utf-8",index=False)
+        df.to_csv("{}{}".format(syspath, data_cq_file_name), encoding="utf-8",index=False)
         return pd.DataFrame(data)
     elif name == "kl8" and mode == "predict":
-        ori_data = pd.read_csv("{}{}".format(name_path[name]["path"], data_cq_file_name))  
+        ori_data = pd.read_csv("{}{}".format(syspath, data_cq_file_name))  
         data = []
         if windows_size > 0:
             ori_data = ori_data[0:windows_size]
@@ -111,6 +114,9 @@ def spider(name="ssq", start=1, end=999999, mode="train", windows_size=0):
     :param mode 模式，train：训练模式，predict：预测模式（训练模式会保持文件）
     :return:
     """
+    syspath = name_path[name]["path"]
+    if not os.path.exists(syspath):
+        os.makedirs(syspath)
     if mode == "train":
         url, path = get_url(name)
         limit = int(end) - int(start) + 1
@@ -161,11 +167,11 @@ def spider(name="ssq", start=1, end=999999, mode="train", windows_size=0):
                 logger.warning("抱歉，没有找到数据源！")
 
         df = pd.DataFrame(data)
-        df.to_csv("{}{}".format(name_path[name]["path"], data_file_name), encoding="utf-8")
+        df.to_csv("{}{}".format(syspath, data_file_name), encoding="utf-8")
         return pd.DataFrame(data)
 
     elif mode == "predict":
-        ori_data = pd.read_csv("{}{}".format(name_path[name]["path"], data_file_name))  
+        ori_data = pd.read_csv("{}{}".format(syspath, data_file_name))  
         data = []
         if windows_size > 0:
             ori_data = ori_data[0:windows_size]
