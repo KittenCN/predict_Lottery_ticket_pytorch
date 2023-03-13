@@ -1,87 +1,84 @@
-import math
 import torch
 import torch.nn as nn
+import torch.optim as optim
+import numpy as np
 
-class TransformerModel(nn.Module):
-    def __init__(self, input_size, hidden_size, output_size, num_layers, num_heads, dropout):
-        super(TransformerModel, self).__init__()
-        self.model_type = 'Transformer'
-        self.pos_encoder = PositionalEncoding(input_size, dropout)
-        encoder_layers = nn.TransformerEncoderLayer(input_size, num_heads, hidden_size, dropout)
-        self.transformer_encoder = nn.TransformerEncoder(encoder_layers, num_layers)
-        self.encoder = nn.Linear(input_size, hidden_size)
-        self.decoder = nn.Linear(hidden_size, output_size)
-
-    def forward(self, src):
-        src = self.pos_encoder(src)
-        src = self.encoder(src)
-        output = self.transformer_encoder(src)
-        output = self.decoder(output)
-        return output
-
-class PositionalEncoding(nn.Module):
-    def __init__(self, d_model, dropout=0.1, max_len=20):
-        super(PositionalEncoding, self).__init__()
-        self.dropout = nn.Dropout(p=dropout)
-
-        pe = torch.zeros(max_len, d_model)
-        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
-        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
-        pe[:, 0::2] = torch.sin(position * div_term)
-        pe[:, 1::2] = torch.cos(position * div_term)
-        pe = pe.unsqueeze(0).transpose(0, 1)
-        self.register_buffer('pe', pe)
-
-    def forward(self, x):
-        x = x + self.pe[:x.size(0), :]
-        return self.dropout(x)
-
-def batch_data(data, batch_size=10):
-    num_batches = len(data) // batch_size
-    for i in range(num_batches):
-        start_idx = i * batch_size
-        end_idx = start_idx + batch_size
-        yield data[start_idx:end_idx]
-
-# 超参数
-input_size = 20
-hidden_size = 256
-output_size = 20
+# Define hyperparameters
+input_dim = 20
+output_dim = 20
+hidden_dim = 128
 num_layers = 2
 num_heads = 4
-dropout = 0.2
-learning_rate = 0.001
+dropout_prob = 0.1
+batch_size = 32
 num_epochs = 100
+learning_rate = 1e-3
 
-# 数据
-data = [[torch.randint(1, 81, size=(20,), dtype=torch.float)] for i in range(100)]
-batched_data = list(batch_data(data))
+# Define the Transformer model
+class TransformerModel(nn.Module):
+    def __init__(self, input_dim, output_dim, hidden_dim, num_layers, num_heads, dropout_prob):
+        super(TransformerModel, self).__init__()
+        self.encoder = nn.TransformerEncoder(
+            nn.TransformerEncoderLayer(
+                d_model=input_dim,
+                nhead=num_heads,
+                dim_feedforward=hidden_dim,
+                dropout=dropout_prob
+            ),
+            num_layers=num_layers
+        )
+        self.decoder = nn.Linear(input_dim * batch_size, output_dim)
+    
+    def forward(self, x):
+        x = x.reshape(batch_size, -1, 20)
+        # x is of shape (batch_size, 10, 20)
+        x = x.permute(1, 0, 2) # swap batch and sequence dimension
+        x = self.encoder(x) # apply the Transformer encoder
+        x = x.reshape(x.shape[0], -1) # flatten the output
+        x = self.decoder(x) # apply a linear layer to get the predicted output
+        x = x.reshape(-1, 20) # reshape the output to be of shape (batch_size, 20)
+        return x
 
-# 模型
-model = TransformerModel(input_size, hidden_size, output_size, num_layers, num_heads, dropout)
+# Generate some sample data
+num_groups = 1000
+data = np.random.randint(1, 81, size=(num_groups, 20))
+labels = np.roll(data, -10, axis=0)
 
-# 损失函数和优化器
-criterion = nn.MSELoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+# Split the data into train and test sets
+train_data = data[:800]
+train_labels = labels[:800]
+test_data = data[800:]
+test_labels = labels[800:]
 
-# 训练
+# Convert the data and labels to PyTorch tensors
+train_data = torch.tensor(train_data, dtype=torch.float32)
+train_labels = torch.tensor(train_labels, dtype=torch.float32)
+test_data = torch.tensor(test_data, dtype=torch.float32)
+test_labels = torch.tensor(test_labels, dtype=torch.float32)
+
+# Create a PyTorch dataset and data loader for the training data
+train_dataset = torch.utils.data.TensorDataset(train_data, train_labels)
+train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+
+# Create the Transformer model and the optimizer
+model = TransformerModel(input_dim, output_dim, hidden_dim, num_layers, num_heads, dropout_prob)
+optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+
+# Define the loss function
+loss_fn = nn.MSELoss()
+
+# Train the model
 for epoch in range(num_epochs):
-    total_loss = 0
-    for batch in batched_data:
-        # 准备数据
-        src = torch.cat(batch[:-1], dim=0).unsqueeze(1)
-        tgt = batch[-1].unsqueeze(1)
-        
-        # 前向传播
+    for i, (batch_data, batch_labels) in enumerate(train_loader):
         optimizer.zero_grad()
-        output = model(src)
-        loss = criterion(output, tgt)
-        
-        # 反向传播和优化
+        output = model(batch_data)
+        loss = loss_fn(output, batch_labels)
         loss.backward()
         optimizer.step()
-        
-        total_loss += loss.item()
-    
-    # 打印损失
-    print("Epoch {} Loss {:.4f}".format(epoch+1, total_loss/len(batched_data)))
+    print("Epoch {}, Loss: {:.4f}".format(epoch+1, loss.item()))
+
+# Evaluate the model on the test set
+with torch.no_grad():
+    test_output = model(test_data)
+    test_loss = loss_fn(test_output, test_labels)
+    print("Test Loss: {:.4f}".format(test_loss.item()))

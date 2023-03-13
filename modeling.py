@@ -70,8 +70,13 @@ def train_model(model, data, labels, num_epochs, batch_size, learning_rate, devi
 
 # 定义数据集类
 class MyDataset(Dataset):
-    def __init__(self, data):
-        self.data = data
+    def __init__(self, data, windows, cut_num):
+        tmp = []
+        windows -= 1
+        for i in range(len(data) - windows):
+            sub_data = data[i:(i+windows+1), :cut_num]
+            tmp.append(sub_data)
+        self.data = np.array(tmp)
     
     def __len__(self):
         return len(self.data) - 1
@@ -84,7 +89,7 @@ class MyDataset(Dataset):
 
 # 定义 Transformer 模型类
 class TransformerModel(nn.Module):
-    def __init__(self, input_size, output_size, hidden_size=256, num_layers=4, num_heads=4, dropout=0.1):
+    def __init__(self, input_size, output_size, hidden_size=512, num_layers=6, num_heads=10, dropout=0.001):
         super().__init__()
         self.transformer = nn.Transformer(
             d_model=input_size,
@@ -101,4 +106,5 @@ class TransformerModel(nn.Module):
         x = self.transformer(x, x) # 使用 Transformer 进行编码和解码
         x = x.permute(1, 0, 2) # 将输出序列转置为 (batch_size, seq_len, input_size)
         x = self.linear(x) # 对输出进行线性变换
+        # x = x[:, -1, :]
         return x

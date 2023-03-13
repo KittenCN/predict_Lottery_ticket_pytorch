@@ -65,14 +65,14 @@ def create_train_data(name, windows, dataset=0):
 
     data = data.iloc[:, 2:].values
     logger.info("训练集数据维度: {}".format(data.shape))
-    x_data, y_data = [], []
+    cut_num = model_args[name]["model_args"]["red_sequence_len"]
     if dataset == 0:
+        x_data, y_data = [], []
         for i in range(len(data) - windows - 1):
             sub_data = data[i:(i+windows+1), :]
             x_data.append(sub_data[1:])
             y_data.append(sub_data[0])
 
-        cut_num = model_args[name]["model_args"]["red_sequence_len"]
         return {
             "red": {
                 "x_data": np.array(x_data)[:, :, :cut_num], "y_data": np.array(y_data)[:, :cut_num]
@@ -82,7 +82,7 @@ def create_train_data(name, windows, dataset=0):
             }
         }
     else:
-        dataset = modeling.MyDataset(data)
+        dataset = modeling.MyDataset(data, windows, cut_num)
         return dataset
 
 
@@ -108,7 +108,7 @@ def train_red_ball_model(name, dataset):
         model.load_state_dict(torch.load("{}red_ball_model_pytorch.ckpt".format(syspath)))
         logger.info("已加载红球模型！")
     criterion = nn.MSELoss()
-    optimizer = optim.Adam(model.parameters(), lr=0.1)
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
     pbar = tqdm(range(model_args[args.name]["model_args"]["red_epochs"]))
     for epoch in range(model_args[args.name]["model_args"]["red_epochs"]):
         running_loss = 0.0
@@ -117,15 +117,13 @@ def train_red_ball_model(name, dataset):
             x, y = batch
             x = x.to(device)
             y = y.to(device)
-            x = x.unsqueeze(1) # 将输入序列的最后一维扩展为 1
-            y = y.unsqueeze(1)
             y_pred = model(x.float())
             loss = criterion(y_pred, y.float())
             loss.backward()
             optimizer.step()
-            # running_loss += loss.item() * x.size(0)
+            running_loss += loss.item() * x.size(0)
         # print(f"Epoch {epoch+1}: Loss = {running_loss / len(dataset):.4f}")
-        pbar.set_description("Epoch {}/{} Loss: {:.4f}".format(epoch, model_args[args.name]["model_args"]["red_epochs"], loss.item()))
+        pbar.set_description("Epoch {}/{} Loss: {:.4f}".format(epoch, model_args[args.name]["model_args"]["red_epochs"], running_loss / len(dataset)))
         pbar.update(1)
         if (epoch + 1) % save_epoch == 0:
             if time.time() - last_save_time > save_interval:
@@ -184,7 +182,7 @@ if __name__ == '__main__':
         raise Exception("窗口大小不能为空！")
     else:
         if args.download_data == 1 and args.predict_pro == 0 and int(time.strftime("%H", time.localtime())) < 20:
-            print("正在创建【{}】数据集...".format(name_path[args.name]["name"]))
+            logger.info("正在创建【{}】数据集...".format(name_path[args.name]["name"]))
             # get_data_run(name=args.name, cq=args.cq)
         model_args[args.name]["model_args"]["red_epochs"] = int(args.red_epochs)
         model_args[args.name]["model_args"]["blue_epochs"] = int(args.blue_epochs)
