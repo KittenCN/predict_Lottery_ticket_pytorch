@@ -74,7 +74,10 @@ class MyDataset(Dataset):
         tmp = []
         windows -= 1
         for i in range(len(data) - windows):
-            sub_data = data[i:(i+windows+1), :cut_num]
+            if cut_num > 0:
+                sub_data = data[i:(i+windows+1), :cut_num]
+            else:
+                sub_data = data[i:(i+windows+1), cut_num:]
             tmp.append(sub_data)
         self.data = np.array(tmp)
     

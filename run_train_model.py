@@ -42,7 +42,7 @@ save_epoch = 10
 save_interval = 10
 last_save_time = time.time()
 
-def create_train_data(name, windows, dataset=0):
+def create_train_data(name, windows, dataset=0, ball_type="red"):
     """ 创建训练数据
     :param name: 玩法，双色球/大乐透
     :param windows: 训练窗口
@@ -82,12 +82,15 @@ def create_train_data(name, windows, dataset=0):
             }
         }
     else:
-        dataset = modeling.MyDataset(data, windows, cut_num)
+        if ball_type == "red":
+            dataset = modeling.MyDataset(data, windows, cut_num)
+        else:
+            dataset = modeling.MyDataset(data, windows, cut_num * -1)
         return dataset
 
 
-def train_red_ball_model(name, dataset):
-    """ 红球模型训练
+def train_ball_model(name, dataset, sub_name="红球"):
+    """ 模型训练
     :param name: 玩法
     :param x_data: 训练样本
     :param y_data: 训练标签
@@ -106,7 +109,7 @@ def train_red_ball_model(name, dataset):
     model = modeling.TransformerModel(input_size=20, output_size=20).to(device)
     if os.path.exists("{}red_ball_model_pytorch.ckpt".format(syspath)):
         model.load_state_dict(torch.load("{}red_ball_model_pytorch.ckpt".format(syspath)))
-        logger.info("已加载红球模型！")
+        logger.info("已加载{}模型！".format(sub_name))
     criterion = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
     pbar = tqdm(range(model_args[args.name]["model_args"]["red_epochs"]))
@@ -131,32 +134,24 @@ def train_red_ball_model(name, dataset):
                 torch.save(model.state_dict(), "{}{}_pytorch.{}".format(syspath, red_ball_model_name, extension))
     pbar.close()
     torch.save(model.state_dict(), "{}{}_pytorch.{}".format(syspath, red_ball_model_name, extension))
-    logger.info("【{}】红球模型训练完成!".format(name_path[name]["name"]))
-
-def train_blue_ball_model(name, x_data, y_data):
-    """ 蓝球模型训练
-    :param name: 玩法
-    :param x_data: 训练样本
-    :param y_data: 训练标签
-    :return:
-    """
-    global last_save_time
-    
+    logger.info("【{}】{}模型训练完成!".format(name_path[name]["name"], sub_name))
 
 def action(name):
     logger.info("正在创建【{}】数据集...".format(name_path[name]["name"]))
-    train_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1)
+    red_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "red")
+    blue_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "blue")
     for i in range(args.epochs):
         if model_args[name]["model_args"]["red_epochs"] > 0:
             logger.info("开始训练【{}】红球模型...".format(name_path[name]["name"]))
             start_time = time.time()
-            train_red_ball_model(name, dataset=train_data)
+            train_ball_model(name, dataset=red_data, sub_name="红球")
             logger.info("训练耗时: {:.4f}".format(time.time() - start_time))
 
         if name not in ["pls", "kl8"] and model_args[name]["model_args"]["blue_epochs"] > 0:
             logger.info("开始训练【{}】蓝球模型...".format(name_path[name]["name"]))
             start_time = time.time()
-            train_blue_ball_model(name, x_data=train_data["blue"]["x_data"], y_data=train_data["blue"]["y_data"])
+            # train_blue_ball_model(name, x_data=train_data["blue"]["x_data"], y_data=train_data["blue"]["y_data"])
+            train_ball_model(name, dataset=blue_data, sub_name="蓝球")
             logger.info("训练耗时: {:.4f}".format(time.time() - start_time))
 
 
