@@ -97,8 +97,10 @@ def train_ball_model(name, dataset, sub_name="红球"):
     :return:
     """
     global last_save_time
+    sub_name_eng = "red" if sub_name == "红球" else "blue"
+    ball_model_name = red_ball_model_name if sub_name == "红球" else blue_ball_model_name
     m_args = model_args[name]
-    syspath = model_path + model_args[args.name]["pathname"]['name'] + str(m_args["model_args"]["windows_size"]) + model_args[args.name]["subpath"]['red']
+    syspath = model_path + model_args[args.name]["pathname"]['name'] + str(m_args["model_args"]["windows_size"]) + model_args[args.name]["subpath"][sub_name_eng]
     if not os.path.exists(syspath):
         os.makedirs(syspath)
     logger.info("标签数据维度: {}".format(dataset.data.shape))
@@ -107,13 +109,13 @@ def train_ball_model(name, dataset, sub_name="红球"):
 
     # 定义模型和优化器
     model = modeling.TransformerModel(input_size=20, output_size=20).to(device)
-    if os.path.exists("{}red_ball_model_pytorch.ckpt".format(syspath)):
-        model.load_state_dict(torch.load("{}red_ball_model_pytorch.ckpt".format(syspath)))
+    if os.path.exists("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)):
+        model.load_state_dict(torch.load("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)))
         logger.info("已加载{}模型！".format(sub_name))
     criterion = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
-    pbar = tqdm(range(model_args[args.name]["model_args"]["red_epochs"]))
-    for epoch in range(model_args[args.name]["model_args"]["red_epochs"]):
+    pbar = tqdm(range(model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]))
+    for epoch in range(model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]):
         running_loss = 0.0
         for batch in dataloader:
             optimizer.zero_grad()
@@ -126,14 +128,14 @@ def train_ball_model(name, dataset, sub_name="红球"):
             optimizer.step()
             running_loss += loss.item() * x.size(0)
         # print(f"Epoch {epoch+1}: Loss = {running_loss / len(dataset):.4f}")
-        pbar.set_description("Epoch {}/{} Loss: {:.4f}".format(epoch, model_args[args.name]["model_args"]["red_epochs"], running_loss / len(dataset)))
+        pbar.set_description("Epoch {}/{} Loss: {:.4f}".format(epoch, model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)], running_loss / len(dataset)))
         pbar.update(1)
         if (epoch + 1) % save_epoch == 0:
             if time.time() - last_save_time > save_interval:
                 last_save_time = time.time()
-                torch.save(model.state_dict(), "{}{}_pytorch.{}".format(syspath, red_ball_model_name, extension))
+                torch.save(model.state_dict(), "{}{}_pytorch.{}".format(syspath, ball_model_name, extension))
     pbar.close()
-    torch.save(model.state_dict(), "{}{}_pytorch.{}".format(syspath, red_ball_model_name, extension))
+    torch.save(model.state_dict(), "{}{}_pytorch.{}".format(syspath, ball_model_name, extension))
     logger.info("【{}】{}模型训练完成!".format(name_path[name]["name"], sub_name))
 
 def action(name):
