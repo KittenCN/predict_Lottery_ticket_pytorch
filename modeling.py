@@ -109,7 +109,7 @@ class MyDataset(Dataset):
 
 # 定义 Transformer 模型类
 class TransformerModel(nn.Module):
-    def __init__(self, input_size, output_size, hidden_size=512, num_layers=6, num_heads=10, dropout=0.001):
+    def __init__(self, input_size, output_size, hidden_size=512, num_layers=6, num_heads=10, dropout=0.001, d_model=128):
         super().__init__()
         self.transformer = nn.Transformer(
             d_model=input_size,

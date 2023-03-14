@@ -17,7 +17,7 @@ import numpy as np
 import modeling
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from common import create_train_data
+from common import create_train_data, setMiniargs
 from tqdm import tqdm
 
 
@@ -25,7 +25,7 @@ warnings.filterwarnings('ignore')
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--name', default="kl8", type=str, help="选择训练数据")
-parser.add_argument('--windows_size', default='3', type=str, help="训练窗口大小,如有多个，用'，'隔开")
+parser.add_argument('--windows_size', default='1', type=str, help="训练窗口大小,如有多个，用'，'隔开")
 parser.add_argument('--red_epochs', default=1000, type=int, help="红球训练轮数")
 parser.add_argument('--blue_epochs', default=1, type=int, help="蓝球训练轮数")
 parser.add_argument('--batch_size', default=32, type=int, help="集合数量")
@@ -75,7 +75,7 @@ def train_ball_model(name, dataset, sub_name="红球"):
             x = x.to(modeling.device)
             y = y.to(modeling.device)
             y_pred = model(x.float())
-            loss = criterion(y_pred, y.float())
+            loss = criterion(y_pred, y)
             loss.backward()
             lr_scheduler.step()
             optimizer.step()
@@ -93,8 +93,8 @@ def train_ball_model(name, dataset, sub_name="红球"):
 
 def action(name):
     logger.info("正在创建【{}】数据集...".format(name_path[name]["name"]))
-    red_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "red")
-    blue_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "blue")
+    red_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "red", args.cq)
+    blue_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "blue", args.cq)
     for i in range(args.epochs):
         if model_args[name]["model_args"]["red_epochs"] > 0:
             logger.info("开始训练【{}】红球模型...".format(name_path[name]["name"]))
