@@ -6,12 +6,60 @@ import requests
 import pandas as pd
 from bs4 import BeautifulSoup
 from loguru import logger
+import torch
 from config import *
-import json
 import datetime
 import numpy as np
-# import tensorflow as tf
-import warnings
+import modeling
+from torch.utils.data import DataLoader
+
+ori_data = None
+
+def create_train_data(name, windows, dataset=0, ball_type="red"):
+    """ 创建训练数据
+    :param name: 玩法，双色球/大乐透
+    :param windows: 训练窗口
+    :return:
+    """
+    global ori_data
+    if ori_data is None:
+        if mini_args.cq == 1 and name == "kl8":
+            ori_data = pd.read_csv("{}{}".format(name_path[name]["path"], data_cq_file_name))
+        else:
+            ori_data = pd.read_csv("{}{}".format(name_path[name]["path"], data_file_name))
+    data = ori_data.copy()
+    if not len(data):
+        raise logger.error(" 请执行 get_data.py 进行数据下载！")
+    else:
+        # 创建模型文件夹
+        if not os.path.exists(model_path):
+            os.mkdir(model_path)
+        logger.info("训练数据已加载! ")
+
+    data = data.iloc[:, 2:].values
+    cut_num = model_args[name]["model_args"]["red_sequence_len"]
+    if dataset == 0:
+        x_data, y_data = [], []
+        for i in range(len(data) - windows - 1):
+            sub_data = data[i:(i+windows+1), :]
+            x_data.append(sub_data[1:])
+            y_data.append(sub_data[0])
+
+        return {
+            "red": {
+                "x_data": np.array(x_data)[:, :, :cut_num], "y_data": np.array(y_data)[:, :cut_num]
+            },
+            "blue": {
+                "x_data": np.array(x_data)[:, :, cut_num:], "y_data": np.array(y_data)[:, cut_num:]
+            }
+        }
+    else:
+        if ball_type == "red":
+            dataset = modeling.MyDataset(data, windows, cut_num)
+        else:
+            dataset = modeling.MyDataset(data, windows, cut_num * -1)
+        logger.info("训练集数据维度: {}".format(dataset.data.shape))
+        return dataset
 
 
 def get_data_run(name, cq=0):
@@ -206,209 +254,142 @@ def spider(name="ssq", start=1, end=999999, mode="train", windows_size=0):
                 logger.warning("抱歉，没有找到数据源！")
         return pd.DataFrame(data)
 
-# filedata = []
-# filetitle = []
+filedata = []
+filetitle = []
 
-# # 关闭eager模式
-# tf.compat.v1.disable_eager_execution()
+pred_key_d = {}
+mini_args = {}
+# current_number = get_current_number(mini_args.name)
 
-# warnings.filterwarnings('ignore')
+def setMiniargs(args):
+    global mini_args
+    mini_args = args
 
-# red_graph = tf.compat.v1.Graph()
-# blue_graph = tf.compat.v1.Graph()
-# pred_key_d = {}
-# red_sess = tf.compat.v1.Session(graph=red_graph)
-# blue_sess = tf.compat.v1.Session(graph=blue_graph)
-# mini_args = {}
-# # current_number = get_current_number(mini_args.name)
+def init():
+    global mini_args,pred_key_d, filedata, filetitle
+    filedata = []
+    filetitle = []
+    pred_key_d = {}
+    mini_args = {}
 
-# def setMiniargs(args):
-#     global mini_args
-#     mini_args = args
+def predict_ball_model(name, dataset, sequence_len, sub_name="红球", window_size=1):
+    """ 模型训练
+    :param name: 玩法
+    :param x_data: 训练样本
+    :param y_data: 训练标签
+    :return:
+    """
+    global last_save_time
+    sub_name_eng = "red" if sub_name == "红球" else "blue"
+    ball_model_name = red_ball_model_name if sub_name == "红球" else blue_ball_model_name
+    m_args = model_args[name]
+    ball_index = 0 if sub_name == "红球" else 1
+    name_list = [(ball_name[ball_index], i + 1) for i in range(sequence_len)]
+    syspath = model_path + model_args[mini_args.name]["pathname"]['name'] + str(window_size) + model_args[mini_args.name]["subpath"][sub_name_eng]
+    if not os.path.exists(syspath):
+        os.makedirs(syspath)
+    logger.info("标签数据维度: {}".format(dataset.data.shape))
 
-# def init():
-#     global mini_args,pred_key_d, red_graph, blue_graph, red_sess, blue_sess, filedata, filetitle
-#     filedata = []
-#     filetitle = []
-#     red_graph = tf.compat.v1.Graph()
-#     blue_graph = tf.compat.v1.Graph()
-#     pred_key_d = {}
-#     red_sess = tf.compat.v1.Session(graph=red_graph)
-#     blue_sess = tf.compat.v1.Session(graph=blue_graph)
-#     mini_args = {}
+    dataset = [dataset[0]]
+    dataloader = DataLoader(dataset, batch_size=1, shuffle=False)
 
-# def run_predict(window_size):
-#     global pred_key_d, red_graph, blue_graph, red_sess, blue_sess
-#     if window_size != 0:
-#         model_args[mini_args.name]["model_args"]["windows_size"] = window_size
-#     redpath = model_path + model_args[mini_args.name]["pathname"]['name'] + str(model_args[mini_args.name]["model_args"]["windows_size"]) + model_args[mini_args.name]["subpath"]['red']
-#     bluepath = model_path + model_args[mini_args.name]["pathname"]['name'] + str(model_args[mini_args.name]["model_args"]["windows_size"]) + model_args[mini_args.name]["subpath"]['blue']
-#     if mini_args.name == "ssq":
-#         red_graph = tf.compat.v1.Graph()
-#         with red_graph.as_default():
-#             red_saver = tf.compat.v1.train.import_meta_graph(
-#                 "{}red_ball_model.ckpt.meta".format(redpath)
-#             )
-#         red_sess = tf.compat.v1.Session(graph=red_graph)
-#         red_saver.restore(red_sess, "{}red_ball_model.ckpt".format(redpath))
-#         logger.info("已加载红球模型！窗口大小:{}".format(model_args[mini_args.name]["model_args"]["windows_size"]))
-    
-#         blue_graph = tf.compat.v1.Graph()
-#         with blue_graph.as_default():
-#             blue_saver = tf.compat.v1.train.import_meta_graph(
-#                 "{}blue_ball_model.ckpt.meta".format(bluepath)
-#             )
-#         blue_sess = tf.compat.v1.Session(graph=blue_graph)
-#         blue_saver.restore(blue_sess, "{}blue_ball_model.ckpt".format(bluepath))
-#         logger.info("已加载蓝球模型！窗口大小:{}".format(model_args[mini_args.name]["model_args"]["windows_size"]))
+    # 定义模型和优化器
+    model = modeling.TransformerModel(input_size=20, output_size=20).to(modeling.device)
+    if os.path.exists("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)):
+        model.load_state_dict(torch.load("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)))
+        logger.info("已加载{}模型！".format(sub_name))
+    for batch in dataloader:
+        x, y = batch
+        x = x.to(modeling.device)
+        y = y.to(modeling.device)
+        y_pred = model(x.float())
+    return y_pred, name_list
 
-#         # 加载关键节点名
-#         with open("{}/{}".format(model_path + model_args[mini_args.name]["pathname"]['name'] + str(model_args[mini_args.name]["model_args"]["windows_size"]), pred_key_name)) as f:
-#             pred_key_d = json.load(f)
+def run_predict(window_size, sequence_len):
+    global pred_key_d
+    balls = ['red', 'blue'] if mini_args.name not in ["pls", "kl8"] else ['red']
+    for sub_name_eng in balls:
+        sub_name = "红球" if sub_name_eng == "red" else "蓝球"
+        if window_size != 0:
+            model_args[mini_args.name]["model_args"]["windows_size"] = window_size
+        syspath = model_path + model_args[mini_args.name]["pathname"]['name'] + str(mini_args.windows_size) + model_args[mini_args.name]["subpath"][sub_name_eng]
+        # redpath = model_path + model_args[mini_args.name]["pathname"]['name'] + str(model_args[mini_args.name]["model_args"]["windows_size"]) + model_args[mini_args.name]["subpath"]['red']
+        # bluepath = model_path + model_args[mini_args.name]["pathname"]['name'] + str(model_args[mini_args.name]["model_args"]["windows_size"]) + model_args[mini_args.name]["subpath"]['blue']
+        # model = modeling.TransformerModel(input_size=20, output_size=20).to(modeling.device)
+        if os.path.exists("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)):
+            # model.load_state_dict(torch.load("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)))
+            # logger.info("已加载{}模型！窗口大小:{}".format(sub_name, model_args[mini_args.name]["model_args"]["windows_size"]))
+            current_number = get_current_number(mini_args.name)
+            logger.info("【{}】最近一期:{}".format(name_path[mini_args.name]["name"], current_number))
+            logger.info("正在创建【{}】数据集...".format(name_path[mini_args.name]["name"]))
+            data = create_train_data(mini_args.name, model_args[mini_args.name]["model_args"]["windows_size"], 1, balls)
+            y_pred, name_list = predict_ball_model(mini_args.name, data, sequence_len, sub_name, window_size)
+            logger.info("预测{}结果为: {}".format(sub_name, y_pred))
+        else:
+            logger.warning("抱歉，没有找到{}模型！".format(sub_name))
+            exit(0)
 
-#         current_number = get_current_number(mini_args.name)
-#         logger.info("【{}】最近一期:{}".format(name_path[mini_args.name]["name"], current_number))
-
-#     elif mini_args.name == "dlt":
-#         red_graph = tf.compat.v1.Graph()
-#         with red_graph.as_default():
-#             red_saver = tf.compat.v1.train.import_meta_graph(
-#                 "{}red_ball_model.ckpt.meta".format(redpath)
-#             )
-#         red_sess = tf.compat.v1.Session(graph=red_graph)
-#         red_saver.restore(red_sess, "{}red_ball_model.ckpt".format(redpath))
-#         logger.info("已加载红球模型！窗口大小:{}".format(model_args[mini_args.name]["model_args"]["windows_size"]))
-
-#         blue_graph = tf.compat.v1.Graph()
-#         with blue_graph.as_default():
-#             blue_saver = tf.compat.v1.train.import_meta_graph(
-#                 "{}blue_ball_model.ckpt.meta".format(bluepath)
-#             )
-#         blue_sess = tf.compat.v1.Session(graph=blue_graph)
-#         blue_saver.restore(blue_sess, "{}blue_ball_model.ckpt".format(bluepath))
-#         logger.info("已加载蓝球模型！窗口大小:{}".format(model_args[mini_args.name]["model_args"]["windows_size"]))
-
-#         # 加载关键节点名
-#         with open("{}/{}".format(model_path + model_args[mini_args.name]["pathname"]['name'] + str(model_args[mini_args.name]["model_args"]["windows_size"]), pred_key_name)) as f:
-#             pred_key_d = json.load(f)
-
-#         current_number = get_current_number(mini_args.name)
-#         logger.info("【{}】最近一期:{}".format(name_path[mini_args.name]["name"], current_number))
-
-#     elif mini_args.name in ["pls", "kl8"]:
-#         red_graph = tf.compat.v1.Graph()
-#         with red_graph.as_default():
-#             red_saver = tf.compat.v1.train.import_meta_graph(
-#                 "{}red_ball_model.ckpt.meta".format(redpath)
-#             )
-#         red_sess = tf.compat.v1.Session(graph=red_graph)
-#         red_saver.restore(red_sess, "{}red_ball_model.ckpt".format(redpath))
-#         logger.info("已加载红球模型！窗口大小:{}".format(model_args[mini_args.name]["model_args"]["windows_size"]))
-
-#         # 加载关键节点名
-#         with open("{}/{}".format(model_path + model_args[mini_args.name]["pathname"]['name'] + str(model_args[mini_args.name]["model_args"]["windows_size"]), pred_key_name)) as f:
-#             pred_key_d = json.load(f)
-
-#         current_number = get_current_number(mini_args.name)
-#         logger.info("【{}】最近一期:{}".format(name_path[mini_args.name]["name"], current_number))
-
-# def get_year():
-#     """ 截取年份
-#     eg：2020-->20, 2021-->21
-#     :return:
-#     """
-#     return int(str(datetime.datetime.now().year)[-2:])
+def get_year():
+    """ 截取年份
+    eg：2020-->20, 2021-->21
+    :return:
+    """
+    return int(str(datetime.datetime.now().year)[-2:])
 
 
-# def try_error(name, predict_features, windows_size):
-#     """ 处理异常
-#     """
-#     if len(predict_features) != windows_size:
-#         logger.warning("期号出现跳期，期号不连续！开始查找最近上一期期号！本期预测时间较久！")
-#         last_current_year = (get_year() - 1) * 1000
-#         max_times = 160
-#         while len(predict_features) != windows_size:
-#             # predict_features = spider(name, last_current_year + max_times, get_current_number(name), "predict")[[x[0] for x in ball_name]]
-#             if mini_args.cq == 0:
-#                 predict_features = spider(name, last_current_year + max_times, get_current_number(name), "predict", windows_size)
-#             else:
-#                 predict_features = spider_cq(name, last_current_year + max_times, get_current_number(name), "predict", windows_size)
-#             # time.sleep(np.random.random(1).tolist()[0])
-#             max_times -= 1
-#         return predict_features
-#     return predict_features
+def try_error(name, predict_features, windows_size):
+    """ 处理异常
+    """
+    if len(predict_features) != windows_size:
+        logger.warning("期号出现跳期，期号不连续！开始查找最近上一期期号！本期预测时间较久！")
+        last_current_year = (get_year() - 1) * 1000
+        max_times = 160
+        while len(predict_features) != windows_size:
+            # predict_features = spider(name, last_current_year + max_times, get_current_number(name), "predict")[[x[0] for x in ball_name]]
+            if mini_args.cq == 0:
+                predict_features = spider(name, last_current_year + max_times, get_current_number(name), "predict", windows_size)
+            else:
+                predict_features = spider_cq(name, last_current_year + max_times, get_current_number(name), "predict", windows_size)
+            # time.sleep(np.random.random(1).tolist()[0])
+            max_times -= 1
+        return predict_features
+    return predict_features
 
-
-# def get_red_ball_predict_result(predict_features, sequence_len, windows_size):
-#     """ 获取红球预测结果
-#     """
-#     name_list = [(ball_name[0], i + 1) for i in range(sequence_len)]
-#     if mini_args.name not in ["pls"]:
-#         hotfixed = 1
-#     else:
-#         hotfixed = 0
-#     data = predict_features[["{}_{}".format(name[0], i) for name, i in name_list]].values.astype(int) - hotfixed
-#     with red_graph.as_default():
-#         reverse_sequence = tf.compat.v1.get_default_graph().get_tensor_by_name(pred_key_d[ball_name[0][0]])
-#         pred = red_sess.run(reverse_sequence, feed_dict={
-#             "inputs:0": data.reshape(1, windows_size, sequence_len),
-#             "sequence_length:0": np.array([sequence_len] * 1)
-#         })
-#     return pred, name_list
-
-
-# def get_blue_ball_predict_result(name, predict_features, sequence_len, windows_size):
-#     """ 获取蓝球预测结果
-#     """
-#     if name == "ssq":
-#         data = predict_features[[ball_name[1][0]]].values.astype(int) - 1
-#         with blue_graph.as_default():
-#             softmax = tf.compat.v1.get_default_graph().get_tensor_by_name(pred_key_d[ball_name[1][0]])
-#             pred = blue_sess.run(softmax, feed_dict={
-#                 "inputs:0": data.reshape(1, windows_size)
-#             })
-#         return pred
-#     else:
-#         name_list = [(ball_name[1], i + 1) for i in range(sequence_len)]
-#         data = predict_features[["{}_{}".format(name[0], i) for name, i in name_list]].values.astype(int) - 1
-#         with blue_graph.as_default():
-#             reverse_sequence = tf.compat.v1.get_default_graph().get_tensor_by_name(pred_key_d[ball_name[1][0]])
-#             pred = blue_sess.run(reverse_sequence, feed_dict={
-#                 "inputs:0": data.reshape(1, windows_size, sequence_len),
-#                 "sequence_length:0": np.array([sequence_len] * 1)
-#             })
-#         return pred, name_list
-
-
-# def get_final_result(name, predict_features, mode=0):
+# def get_final_result(name, mode=0):
 #     """" 最终预测函数
 #     """
 #     m_args = model_args[name]["model_args"]
+#     windows_size = model_args[name]["model_args"]["windows_size"]
+#     current_number = get_current_number(mini_args.name)
+#     logger.info("正在创建【{}】数据集...".format(name_path[name]["name"]))
+#     red_data = create_train_data(name, windows_size, 1, "red")
+#     blue_data = create_train_data(name, windows_size, 1, "blue")
+#     logger.info("【{}】预测期号：{} 窗口大小:{}".format(name_path[name]["name"], int(current_number) + 1, windows_size))
 #     if name == "ssq":
-#         red_pred, red_name_list = get_red_ball_predict_result(predict_features, m_args["sequence_len"], m_args["windows_size"])
-#         blue_pred = get_blue_ball_predict_result(name, predict_features, 0, m_args["windows_size"])
+#         red_pred, red_name_list = get_red_ball_predict_result(red_data, m_args["sequence_len"], m_args["windows_size"])
+#         blue_pred = get_blue_ball_predict_result(name, blue_data, 0, m_args["windows_size"])
 #         ball_name_list = ["{}_{}".format(name[mode], i) for name, i in red_name_list] + [ball_name[1][mode]]
 #         pred_result_list = red_pred[0].tolist() + blue_pred.tolist()
 #         return {
 #             b_name: int(res) + 1 for b_name, res in zip(ball_name_list, pred_result_list)
 #         }
 #     elif name == "dlt":
-#         red_pred, red_name_list = get_red_ball_predict_result(predict_features, m_args["red_sequence_len"], m_args["windows_size"])
-#         blue_pred, blue_name_list = get_blue_ball_predict_result(name, predict_features, m_args["blue_sequence_len"], m_args["windows_size"])
+#         red_pred, red_name_list = get_red_ball_predict_result(red_data, m_args["red_sequence_len"], m_args["windows_size"])
+#         blue_pred, blue_name_list = get_blue_ball_predict_result(name, blue_data, m_args["blue_sequence_len"], m_args["windows_size"])
 #         ball_name_list = ["{}_{}".format(name[mode], i) for name, i in red_name_list] + ["{}_{}".format(name[mode], i) for name, i in blue_name_list]
 #         pred_result_list = red_pred[0].tolist() + blue_pred[0].tolist()
 #         return {
 #             b_name: int(res) + 1 for b_name, res in zip(ball_name_list, pred_result_list)
 #         }
 #     elif name == "pls":
-#         red_pred, red_name_list = get_red_ball_predict_result(predict_features, m_args["red_sequence_len"], m_args["windows_size"])
+#         red_pred, red_name_list = get_red_ball_predict_result(red_data, m_args["red_sequence_len"], m_args["windows_size"])
 #         ball_name_list = ["{}_{}".format(name[mode], i) for name, i in red_name_list]
 #         pred_result_list = red_pred[0].tolist()
 #         return {
 #             b_name: int(res) for b_name, res in zip(ball_name_list, pred_result_list)
 #         }
 #     elif name == "kl8":
-#         red_pred, red_name_list = get_red_ball_predict_result(predict_features, m_args["red_sequence_len"], m_args["windows_size"])
+#         red_pred, red_name_list = get_red_ball_predict_result(red_data, m_args["red_sequence_len"], m_args["windows_size"])
 #         ball_name_list = ["{}_{}".format(name[mode], i) for name, i in red_name_list]
 #         pred_result_list = red_pred[0].tolist()
 #         return {
@@ -419,15 +400,8 @@ def spider(name="ssq", start=1, end=999999, mode="train", windows_size=0):
 #     global filedata, filetitle
 #     windows_size = model_args[name]["model_args"]["windows_size"]
 #     diff_number = windows_size - 1
-#     current_number = get_current_number(mini_args.name)
-#     if mini_args.cq == 0:
-#         data = spider(name, str(int(current_number) - diff_number), current_number, "predict", windows_size)
-#     else:
-#         data = spider_cq(name, str(int(current_number) - diff_number), current_number, "predict", windows_size)
-#     logger.info("【{}】预测期号：{} 窗口大小:{}".format(name_path[name]["name"], int(current_number) + 1, windows_size))
-#     predict_features_ = try_error(name, data, windows_size)
 #     # logger.info("预测结果：{}".format(get_final_result(name, predict_features_)))
-#     predict_dict = get_final_result(name, predict_features_)
+#     predict_dict = get_final_result(name)
 #     ans = ""
 #     _data = []
 #     _title = []

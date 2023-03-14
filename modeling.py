@@ -10,6 +10,8 @@ import torch.utils.data as Data
 import numpy as np
 from torch.utils.data import  Dataset
 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model, dropout_prob=0.1, max_len=5000):
         super(PositionalEncoding, self).__init__()

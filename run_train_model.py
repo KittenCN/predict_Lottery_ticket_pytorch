@@ -17,12 +17,11 @@ import numpy as np
 import modeling
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from common import get_data_run
+from common import create_train_data
 from tqdm import tqdm
 
 
 warnings.filterwarnings('ignore')
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--name', default="kl8", type=str, help="选择训练数据")
@@ -37,57 +36,9 @@ parser.add_argument('--download_data', default=1, type=int, help="是否下载�
 args = parser.parse_args()
 
 pred_key = {}
-ori_data = None
 save_epoch = 10
 save_interval = 60
 last_save_time = time.time()
-
-def create_train_data(name, windows, dataset=0, ball_type="red"):
-    """ 创建训练数据
-    :param name: 玩法，双色球/大乐透
-    :param windows: 训练窗口
-    :return:
-    """
-    global ori_data
-    if ori_data is None:
-        if args.cq == 1 and name == "kl8":
-            ori_data = pd.read_csv("{}{}".format(name_path[name]["path"], data_cq_file_name))
-        else:
-            ori_data = pd.read_csv("{}{}".format(name_path[name]["path"], data_file_name))
-    data = ori_data.copy()
-    if not len(data):
-        raise logger.error(" 请执行 get_data.py 进行数据下载！")
-    else:
-        # 创建模型文件夹
-        if not os.path.exists(model_path):
-            os.mkdir(model_path)
-        logger.info("训练数据已加载! ")
-
-    data = data.iloc[:, 2:].values
-    cut_num = model_args[name]["model_args"]["red_sequence_len"]
-    if dataset == 0:
-        x_data, y_data = [], []
-        for i in range(len(data) - windows - 1):
-            sub_data = data[i:(i+windows+1), :]
-            x_data.append(sub_data[1:])
-            y_data.append(sub_data[0])
-
-        return {
-            "red": {
-                "x_data": np.array(x_data)[:, :, :cut_num], "y_data": np.array(y_data)[:, :cut_num]
-            },
-            "blue": {
-                "x_data": np.array(x_data)[:, :, cut_num:], "y_data": np.array(y_data)[:, cut_num:]
-            }
-        }
-    else:
-        if ball_type == "red":
-            dataset = modeling.MyDataset(data, windows, cut_num)
-        else:
-            dataset = modeling.MyDataset(data, windows, cut_num * -1)
-        logger.info("训练集数据维度: {}".format(dataset.data.shape))
-        return dataset
-
 
 def train_ball_model(name, dataset, sub_name="红球"):
     """ 模型训练
@@ -108,7 +59,7 @@ def train_ball_model(name, dataset, sub_name="红球"):
     dataloader = DataLoader(dataset, batch_size=model_args[args.name]["model_args"]["batch_size"], shuffle=False)
 
     # 定义模型和优化器
-    model = modeling.TransformerModel(input_size=20, output_size=20).to(device)
+    model = modeling.TransformerModel(input_size=20, output_size=20).to(modeling.device)
     if os.path.exists("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)):
         model.load_state_dict(torch.load("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)))
         logger.info("已加载{}模型！".format(sub_name))
@@ -121,8 +72,8 @@ def train_ball_model(name, dataset, sub_name="红球"):
         for batch in dataloader:
             optimizer.zero_grad()
             x, y = batch
-            x = x.to(device)
-            y = y.to(device)
+            x = x.to(modeling.device)
+            y = y.to(modeling.device)
             y_pred = model(x.float())
             loss = criterion(y_pred, y.float())
             loss.backward()
