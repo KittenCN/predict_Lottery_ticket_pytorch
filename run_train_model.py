@@ -26,13 +26,13 @@ warnings.filterwarnings('ignore')
 parser = argparse.ArgumentParser()
 parser.add_argument('--name', default="kl8", type=str, help="选择训练数据")
 parser.add_argument('--windows_size', default='5', type=str, help="训练窗口大小,如有多个，用'，'隔开")
-parser.add_argument('--red_epochs', default=10, type=int, help="红球训练轮数")
+parser.add_argument('--red_epochs', default=100, type=int, help="红球训练轮数")
 parser.add_argument('--blue_epochs', default=1, type=int, help="蓝球训练轮数")
 parser.add_argument('--batch_size', default=32, type=int, help="集合数量")
 parser.add_argument('--predict_pro', default=0, type=int, help="更新batch_size")
 parser.add_argument('--epochs', default=1, type=int, help="训练轮数(红蓝球交叉训练)")
 parser.add_argument('--cq', default=1, type=int, help="是否使用出球顺序，0：不使用（即按从小到大排序），1：使用")
-parser.add_argument('--download_data', default=0, type=int, help="是否下载数据")
+parser.add_argument('--download_data', default=1, type=int, help="是否下载数据")
 args = parser.parse_args()
 
 pred_key = {}
@@ -81,7 +81,7 @@ def train_ball_model(name, dataset, sub_name="红球"):
             optimizer.step()
             running_loss += loss.item() * x.size(0)
         # print(f"Epoch {epoch+1}: Loss = {running_loss / len(dataset):.4f}")
-        pbar.set_description("Epoch {}/{} Loss: {:.4f}".format(epoch, model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)], running_loss / len(dataset)))
+        pbar.set_description("Epoch {}/{} Loss: {:.4f}".format(epoch+1, model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)], running_loss / len(dataset)))
         pbar.update(1)
         if (epoch + 1) % save_epoch == 0:
             if time.time() - last_save_time > save_interval:

@@ -26,7 +26,7 @@ class PositionalEncoding(nn.Module):
         self.register_buffer('pe', pe)
 
     def forward(self, x):
-        x = x + self.pe[:x.size(0), :]
+        x = x + self.pe[:x.size(0), :].unsqueeze(-2).expand(-1, -1, x.size(2), -1)
         return self.dropout(x)
 
 
@@ -126,6 +126,6 @@ class TransformerModel(nn.Module):
         x = x.permute(1, 0, 2) # 将输入序列转置为 (seq_len, batch_size, input_size)
         x = self.transformer(x, x) # 使用 Transformer 进行编码和解码
         x = x.permute(1, 0, 2) # 将输出序列转置为 (batch_size, seq_len, input_size)
-        x = self.linear(x) # 对输出进行线性变换
-        x = x[:, -1, :]
+        x = self.linear(x) # 对输出进行线性变换(batch_size, seq_len, output_size)
+        x = x[:, -1, :] # 取最后一个时间步的输出作为模型的输出(batch_size, output_size)
         return x
