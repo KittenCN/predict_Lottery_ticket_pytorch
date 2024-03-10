@@ -25,14 +25,14 @@ warnings.filterwarnings('ignore')
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--name', default="kl8", type=str, help="选择训练数据")
-parser.add_argument('--windows_size', default='1', type=str, help="训练窗口大小,如有多个，用'，'隔开")
-parser.add_argument('--red_epochs', default=1000, type=int, help="红球训练轮数")
+parser.add_argument('--windows_size', default='5', type=str, help="训练窗口大小,如有多个，用'，'隔开")
+parser.add_argument('--red_epochs', default=10, type=int, help="红球训练轮数")
 parser.add_argument('--blue_epochs', default=1, type=int, help="蓝球训练轮数")
 parser.add_argument('--batch_size', default=32, type=int, help="集合数量")
 parser.add_argument('--predict_pro', default=0, type=int, help="更新batch_size")
 parser.add_argument('--epochs', default=1, type=int, help="训练轮数(红蓝球交叉训练)")
 parser.add_argument('--cq', default=1, type=int, help="是否使用出球顺序，0：不使用（即按从小到大排序），1：使用")
-parser.add_argument('--download_data', default=1, type=int, help="是否下载数据")
+parser.add_argument('--download_data', default=0, type=int, help="是否下载数据")
 args = parser.parse_args()
 
 pred_key = {}
@@ -72,9 +72,9 @@ def train_ball_model(name, dataset, sub_name="红球"):
         for batch in dataloader:
             optimizer.zero_grad()
             x, y = batch
-            x = x.to(modeling.device)
-            y = y.to(modeling.device)
-            y_pred = model(x.float())
+            x = x.float().to(modeling.device)
+            y = y.float().to(modeling.device)
+            y_pred = model(x)
             loss = criterion(y_pred, y)
             loss.backward()
             lr_scheduler.step()

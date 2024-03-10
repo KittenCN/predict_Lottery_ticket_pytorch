@@ -30,8 +30,8 @@ class PositionalEncoding(nn.Module):
         return self.dropout(x)
 
 
-class Transformer_Model(nn.Module):
-    def __init__(self, input_size, hidden_size, num_layers, num_heads, dropout_prob):
+class Transformer_Model(nn.Module): 
+    def __init__(self, input_size, output_size, hidden_size=512, num_layers=6, num_heads=16, dropout_prob=0.001, d_model=128):
         super(Transformer_Model, self).__init__()
 
         self.embedding = nn.Embedding(input_size, hidden_size)
@@ -40,9 +40,10 @@ class Transformer_Model(nn.Module):
         self.transformer_encoder = nn.TransformerEncoder(
             self.transformer_layer,
             num_layers)
-        self.linear = nn.Linear(hidden_size, 1)
+        self.linear = nn.Linear(hidden_size, output_size)
 
     def forward(self, x):
+        x = x.int()
         embedded = self.embedding(x)
         positional_encoded = self.positional_encoding(embedded)
         transformer_encoded = self.transformer_encoder(positional_encoded)
@@ -95,7 +96,7 @@ class MyDataset(Dataset):
                 sub_data = data[i:(i+windows+1), :cut_num]
             else:
                 sub_data = data[i:(i+windows+1), cut_num:]
-            tmp.append(sub_data)
+            tmp.append(sub_data.reshape(windows+1, cut_num))
         self.data = np.array(tmp)
     
     def __len__(self):
@@ -104,12 +105,12 @@ class MyDataset(Dataset):
     def __getitem__(self, idx):
         # 将每组数据分为输入序列和目标序列
         x = self.data[idx][1:]
-        y = self.data[idx][0]
+        y = self.data[idx][0].reshape(1, 20)
         return x, y
 
 # 定义 Transformer 模型类
 class TransformerModel(nn.Module):
-    def __init__(self, input_size, output_size, hidden_size=512, num_layers=6, num_heads=10, dropout=0.001, d_model=128):
+    def __init__(self, input_size, output_size=20, hidden_size=512, num_layers=6, num_heads=10, dropout=0.001, d_model=128):
         super().__init__()
         self.transformer = nn.Transformer(
             d_model=input_size,
