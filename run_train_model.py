@@ -71,7 +71,9 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     lr_scheduler=modeling.CustomSchedule(d_model=20*m_args["model_args"]["windows_size"], optimizer=optimizer)
     pbar = tqdm(range(model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]))
     running_loss = 0.0
+    running_times = 0
     test_loss = 0.0
+    test_times = 0
     for epoch in range(model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]):
         running_loss = 0.0
         running_times = 0
