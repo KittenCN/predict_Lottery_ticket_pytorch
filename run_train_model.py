@@ -72,12 +72,12 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     for epoch in range(model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]):
         running_loss = 0.0
         for batch in dataloader:
-            optimizer.zero_grad()
             x, y = batch
             x = x.float().to(modeling.device)
             y = y.float().to(modeling.device)
             y_pred = model(x)
             loss = criterion(y_pred, y)
+            optimizer.zero_grad()
             loss.backward()
             lr_scheduler.step()
             optimizer.step()
