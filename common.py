@@ -336,7 +336,13 @@ def run_predict(window_size, sequence_len):
             logger.info("正在创建【{}】数据集...".format(name_path[mini_args.name]["name"]))
             data = create_train_data(mini_args.name, model_args[mini_args.name]["model_args"]["windows_size"], 1, balls, mini_args.cq)
             y_pred, name_list = predict_ball_model(mini_args.name, data, sequence_len, sub_name, window_size)
-            logger.info("预测{}结果为: {}".format(sub_name, y_pred))
+            y_pred_list = y_pred.cpu().tolist()
+            logger.info("预测{}结果为: \n".format(sub_name))
+            for row in y_pred_list:
+                strrow = ""
+                for col in row:
+                    strrow += int(col)
+                logger.info(strrow)
         else:
             logger.warning("抱歉，没有找到{}模型！".format(sub_name))
             exit(0)
