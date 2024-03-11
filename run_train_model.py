@@ -64,7 +64,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
         model.load_state_dict(torch.load("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)))
         logger.info("已加载{}模型！".format(sub_name))
     criterion = nn.MSELoss()
-    optimizer = optim.Adam(model.parameters(), lr=0.001, weight_decay=0.01)
+    optimizer = optim.Adam(model.parameters(), lr=0.01, weight_decay=0.01)
     lr_scheduler=modeling.CustomSchedule(20, optimizer=optimizer)
     pbar = tqdm(range(model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]))
     running_loss = 0.0
