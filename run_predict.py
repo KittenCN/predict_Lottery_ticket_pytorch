@@ -14,6 +14,9 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--name', default="kl8", type=str, help="选择训练数据")
 parser.add_argument('--windows_size', default='5', type=str, help="训练窗口大小,如有多个，用'，'隔开")
 parser.add_argument('--cq', default=0, type=int, help="是否使用出球顺序，0：不使用（即按从小到大排序），1：使用")
+parser.add_argument('--hidden_size', default=128, type=int, help="hidden_size")
+parser.add_argument('--num_layers', default=8, type=int, help="num_layers")
+parser.add_argument('--num_heads', default=16, type=int, help="num_heads")
 args = parser.parse_args()
 
 if __name__ == '__main__':
@@ -41,7 +44,7 @@ if __name__ == '__main__':
             logger.info("windows_size: {}".format(list_windows_size))
         for size in list_windows_size:
             current_number = get_current_number(args.name)
-            run_predict(int(size), model_args[args.name]["model_args"]['red_sequence_len'])
+            run_predict(int(size), model_args[args.name]["model_args"]['red_sequence_len'], hidden_size=args.hidden_size, num_layers=args.num_layers, num_heads=args.num_heads)
             # _data, _title = predict_run(args.name)
         # filename = datetime.datetime.now().strftime('%Y%m%d')
         # filepath = "{}{}/".format(predict_path, args.name)

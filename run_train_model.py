@@ -33,6 +33,9 @@ parser.add_argument('--predict_pro', default=0, type=int, help="更新batch_size
 parser.add_argument('--epochs', default=1, type=int, help="训练轮数(红蓝球交叉训练)")
 parser.add_argument('--cq', default=0, type=int, help="是否使用出球顺序，0：不使用（即按从小到大排序），1：使用")
 parser.add_argument('--download_data', default=1, type=int, help="是否下载数据")
+parser.add_argument('--hidden_size', default=128, type=int, help="hidden_size")
+parser.add_argument('--num_layers', default=8, type=int, help="num_layers")
+parser.add_argument('--num_heads', default=16, type=int, help="num_heads")
 args = parser.parse_args()
 
 pred_key = {}
@@ -59,7 +62,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     dataloader = DataLoader(dataset, batch_size=model_args[args.name]["model_args"]["batch_size"], shuffle=True)
     test_dataloader = DataLoader(test_dataset, batch_size=model_args[args.name]["model_args"]["batch_size"], shuffle=False)
     # 定义模型和优化器
-    model = modeling.Transformer_Model(input_size=20, output_size=20, windows_size=m_args["model_args"]["windows_size"], hidden_size=1024, num_layers=32, num_heads=64, dropout=0.1, d_model=128).to(modeling.device)
+    model = modeling.Transformer_Model(input_size=20, output_size=20, windows_size=m_args["model_args"]["windows_size"], hidden_size=args.hidden_size, num_layers=args.num_layers, num_heads=args.nem_heads, dropout=0.1, d_model=128).to(modeling.device)
     if os.path.exists("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)):
         model.load_state_dict(torch.load("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)))
         logger.info("已加载{}模型！".format(sub_name))

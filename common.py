@@ -284,7 +284,7 @@ def init():
     pred_key_d = {}
     mini_args = {}
 
-def predict_ball_model(name, dataset, sequence_len, sub_name="红球", window_size=1):
+def predict_ball_model(name, dataset, sequence_len, sub_name="红球", window_size=1, hidden_size=128, num_layers=8, num_heads=16):
     """ 模型训练
     :param name: 玩法
     :param x_data: 训练样本
@@ -306,7 +306,7 @@ def predict_ball_model(name, dataset, sequence_len, sub_name="红球", window_si
     dataloader = DataLoader(dataset, batch_size=1, shuffle=False)
 
     # 定义模型和优化器
-    model = modeling.Transformer_Model(input_size=20, output_size=20, windows_size=m_args["model_args"]["windows_size"], hidden_size=1024, num_layers=32, num_heads=64, dropout=0.1, d_model=128).to(modeling.device)
+    model = modeling.Transformer_Model(input_size=20, output_size=20, windows_size=m_args["model_args"]["windows_size"], hidden_size=hidden_size, num_layers=num_layers, num_heads=num_heads, dropout=0.1, d_model=128).to(modeling.device)
     if os.path.exists("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)):
         model.load_state_dict(torch.load("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)))
         logger.info("已加载{}模型！".format(sub_name))
@@ -317,7 +317,7 @@ def predict_ball_model(name, dataset, sequence_len, sub_name="红球", window_si
         y_pred = model(x.float())
     return y_pred, name_list
 
-def run_predict(window_size, sequence_len):
+def run_predict(window_size, sequence_len, hidden_size=128, num_layers=8, num_heads=16):
     global pred_key_d
     balls = ['red', 'blue'] if mini_args.name not in ["pls", "kl8"] else ['red']
     for sub_name_eng in balls:
@@ -335,7 +335,7 @@ def run_predict(window_size, sequence_len):
             logger.info("【{}】最近一期:{}".format(name_path[mini_args.name]["name"], current_number))
             logger.info("正在创建【{}】数据集...".format(name_path[mini_args.name]["name"]))
             data = create_train_data(mini_args.name, model_args[mini_args.name]["model_args"]["windows_size"], 1, balls, mini_args.cq)
-            y_pred, name_list = predict_ball_model(mini_args.name, data, sequence_len, sub_name, window_size)
+            y_pred, name_list = predict_ball_model(mini_args.name, data, sequence_len, sub_name, window_size,hidden_size=hidden_size, num_layers=num_layers, num_heads=num_heads)
             y_pred_list = y_pred.cpu().tolist()
             logger.info("预测{}结果为: \n".format(sub_name))
             for row in y_pred_list:
