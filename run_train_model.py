@@ -56,7 +56,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
         os.makedirs(syspath)
     logger.info("标签数据维度: {}".format(dataset.data.shape))
 
-    dataloader = DataLoader(dataset, batch_size=model_args[args.name]["model_args"]["batch_size"], shuffle=False)
+    dataloader = DataLoader(dataset, batch_size=model_args[args.name]["model_args"]["batch_size"], shuffle=True)
     test_dataloader = DataLoader(test_dataset, batch_size=model_args[args.name]["model_args"]["batch_size"], shuffle=False)
     # 定义模型和优化器
     model = modeling.Transformer_Model(input_size=20, output_size=20, windows_size=m_args["model_args"]["windows_size"], hidden_size=1024, num_layers=32, num_heads=64, dropout=0.1, d_model=128).to(modeling.device)
@@ -65,7 +65,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
         logger.info("已加载{}模型！".format(sub_name))
     criterion = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=0.01, weight_decay=0.01)
-    lr_scheduler=modeling.CustomSchedule(20, optimizer=optimizer)
+    lr_scheduler=modeling.CustomSchedule(d_model=20*m_args["model_args"]["windows_size"], optimizer=optimizer)
     pbar = tqdm(range(model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]))
     running_loss = 0.0
     test_loss = 0.0
