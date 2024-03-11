@@ -83,7 +83,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
             optimizer.step()
             running_loss += loss.item() * x.size(0)
         # print(f"Epoch {epoch+1}: Loss = {running_loss / len(dataset):.4f}")
-        if (epoch + 1) % (model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)] // save_epoch) == 0:
+        if (epoch + 1) % save_epoch == 0:
             if time.time() - last_save_time > save_interval:
                 last_save_time = time.time()
                 torch.save(model.state_dict(), "{}{}_pytorch.{}".format(syspath, ball_model_name, extension))
