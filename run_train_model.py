@@ -110,12 +110,12 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
                     # test_loss += tt_loss.item() * x.size(0)
                     test_loss += tt_loss.item()
                 # logger.info("Epoch {}/{} Test Loss: {:.4f}".format(epoch+1, model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)], test_loss / len(test_dataset)))
-        pbar.set_description("Avg_Loss: {:.4f} Test_Loss: {:.4f}".format(running_loss / running_times, test_loss / test_times))
+        pbar.set_description("Avg_Loss: {:.4f} Test_Loss: {:.4f}".format(running_loss / (running_times if running_times > 0 else 1), test_loss / (test_times if test_times > 0 else 1)))
         pbar.update(1)
     pbar.close()
     torch.save(model.state_dict(), "{}{}_pytorch.{}".format(syspath, ball_model_name, extension))
     logger.info("【{}】{}模型训练完成!".format(name_path[name]["name"], sub_name))
-    logger.info("Tran Loss: {:.4f} Test Loss: {:.4f}".format(running_loss / running_times, test_loss / test_times))
+    logger.info("Tran Loss: {:.4f} Test Loss: {:.4f}".format(running_loss / (running_times if running_times > 0 else 1), test_loss / (test_times if test_times > 0 else 1)))
 
 def action(name):
     logger.info("正在创建【{}】数据集...".format(name_path[name]["name"]))
