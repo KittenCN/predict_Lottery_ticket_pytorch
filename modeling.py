@@ -34,7 +34,7 @@ class PositionalEncoding(nn.Module):
 
 
 class Transformer_Model(nn.Module): 
-    def __init__(self, input_size, output_size=20, hidden_size=2048, num_layers=32, num_heads=64, dropout=0.1, d_model=128, windows_size=5):
+    def __init__(self, input_size, output_size=20, hidden_size=1024, num_layers=32, num_heads=64, dropout=0.1, d_model=128, windows_size=5):
         super(Transformer_Model, self).__init__()
 
         self.embedding = nn.Embedding(input_size * windows_size, hidden_size)
@@ -115,7 +115,7 @@ class MyDataset(Dataset):
 
 # 定义 Transformer 模型类
 class TransformerModel(nn.Module):
-    def __init__(self, input_size, output_size=20, hidden_size=2048, num_layers=32, num_heads=64, dropout=0.1, d_model=128, windows_size=5):
+    def __init__(self, input_size, output_size=20, hidden_size=1024, num_layers=32, num_heads=64, dropout=0.1, d_model=128, windows_size=5):
         super().__init__()
         self.transformer = nn.Transformer(
             d_model=input_size,

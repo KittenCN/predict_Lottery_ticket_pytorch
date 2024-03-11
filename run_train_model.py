@@ -59,7 +59,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     dataloader = DataLoader(dataset, batch_size=model_args[args.name]["model_args"]["batch_size"], shuffle=False)
     test_dataloader = DataLoader(test_dataset, batch_size=model_args[args.name]["model_args"]["batch_size"], shuffle=False)
     # 定义模型和优化器
-    model = modeling.Transformer_Model(input_size=20, output_size=20, windows_size=m_args["model_args"]["windows_size"]).to(modeling.device)
+    model = modeling.Transformer_Model(input_size=20, output_size=20, windows_size=m_args["model_args"]["windows_size"], hidden_size=1024, num_layers=32, num_heads=64, dropout=0.1, d_model=128).to(modeling.device)
     if os.path.exists("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)):
         model.load_state_dict(torch.load("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)))
         logger.info("已加载{}模型！".format(sub_name))
