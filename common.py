@@ -44,7 +44,7 @@ def create_train_data(name, windows, dataset=0, ball_type="red", cq=0, test_flag
         # 创建模型文件夹
         if not os.path.exists(model_path):
             os.mkdir(model_path)
-        logger.info(strball + strflag + "数据已加载! ")
+        # logger.info(strball + strflag + "数据已加载! ")
 
     data = data.iloc[:, 2:].values
     tmp = []

@@ -110,8 +110,9 @@ def action(name):
     logger.info("正在创建【{}】数据集...".format(name_path[name]["name"]))
     red_train_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "red", args.cq, 0, 2021351)
     red_test_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "red", args.cq, 1, 2021351)
-    blue_train_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "blue", args.cq, 0, 2021351)
-    blue_test_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "blue", args.cq, 1, 2021351)
+    if name not in ["kl8"]:
+        blue_train_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "blue", args.cq, 0, 2021351)
+        blue_test_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "blue", args.cq, 1, 2021351)
     for i in range(args.epochs):
         if model_args[name]["model_args"]["red_epochs"] > 0:
             logger.info("开始训练【{}】红球模型...".format(name_path[name]["name"]))
