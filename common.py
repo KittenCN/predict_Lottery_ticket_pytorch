@@ -19,26 +19,32 @@ filetitle = []
 pred_key_d = {}
 mini_args = {}
 
-def create_train_data(name, windows, dataset=0, ball_type="red", cq=0):
+def create_train_data(name, windows, dataset=0, ball_type="red", cq=0, test_flag=0, test_begin=2021351):
     """ 创建训练数据
     :param name: 玩法，双色球/大乐透
     :param windows: 训练窗口
     :return:
     """
     global ori_data
+    strflag = "训练" if test_flag == 0 else "测试"
+    strball = "红球" if ball_type == "red" else "蓝球"
     if ori_data is None:
         if cq == 1 and name == "kl8":
             ori_data = pd.read_csv("{}{}".format(name_path[name]["path"], data_cq_file_name))
         else:
             ori_data = pd.read_csv("{}{}".format(name_path[name]["path"], data_file_name))
     data = ori_data.copy()
+    if test_flag == 0:
+        data = data[data['期数'] > test_begin]
+    else:
+        data = data[data['期数'] <= test_begin]
     if not len(data):
         raise logger.error(" 请执行 get_data.py 进行数据下载！")
     else:
         # 创建模型文件夹
         if not os.path.exists(model_path):
             os.mkdir(model_path)
-        logger.info("训练数据已加载! ")
+        logger.info(strball + strflag + "数据已加载! ")
 
     data = data.iloc[:, 2:].values
     tmp = []
@@ -69,7 +75,7 @@ def create_train_data(name, windows, dataset=0, ball_type="red", cq=0):
             dataset = modeling.MyDataset(data, windows, cut_num)
         else:
             dataset = modeling.MyDataset(data, windows, cut_num * -1)
-        logger.info("训练集数据维度: {}".format(dataset.data.shape))
+        logger.info(strball + strflag + "集数据维度: {}".format(dataset.data.shape))
         return dataset
 
 

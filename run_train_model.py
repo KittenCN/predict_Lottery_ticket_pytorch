@@ -40,7 +40,7 @@ save_epoch = 10
 save_interval = 60
 last_save_time = time.time()
 
-def train_ball_model(name, dataset, sub_name="红球"):
+def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     """ 模型训练
     :param name: 玩法
     :param x_data: 训练样本
@@ -57,16 +57,18 @@ def train_ball_model(name, dataset, sub_name="红球"):
     logger.info("标签数据维度: {}".format(dataset.data.shape))
 
     dataloader = DataLoader(dataset, batch_size=model_args[args.name]["model_args"]["batch_size"], shuffle=False)
-
+    test_dataloader = DataLoader(test_dataset, batch_size=model_args[args.name]["model_args"]["batch_size"], shuffle=False)
     # 定义模型和优化器
-    model = modeling.TransformerModel(input_size=20, output_size=20).to(modeling.device)
+    model = modeling.Transformer_Model(input_size=20, output_size=20, windows_size=m_args["model_args"]["windows_size"]).to(modeling.device)
     if os.path.exists("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)):
         model.load_state_dict(torch.load("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)))
         logger.info("已加载{}模型！".format(sub_name))
     criterion = nn.MSELoss()
-    optimizer = optim.Adam(model.parameters(), lr=0.001, weight_decay=0.0001)
+    optimizer = optim.Adam(model.parameters(), lr=0.001, weight_decay=0.01)
     lr_scheduler=modeling.CustomSchedule(20, optimizer=optimizer)
     pbar = tqdm(range(model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]))
+    running_loss = 0.0
+    test_loss = 0.0
     for epoch in range(model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]):
         running_loss = 0.0
         for batch in dataloader:
@@ -81,32 +83,47 @@ def train_ball_model(name, dataset, sub_name="红球"):
             optimizer.step()
             running_loss += loss.item() * x.size(0)
         # print(f"Epoch {epoch+1}: Loss = {running_loss / len(dataset):.4f}")
-        pbar.set_description("Epoch {}/{} Loss: {:.4f}".format(epoch+1, model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)], running_loss / len(dataset)))
-        pbar.update(1)
-        if (epoch + 1) % save_epoch == 0:
+        if (epoch + 1) % (model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)] // save_epoch) == 0:
             if time.time() - last_save_time > save_interval:
                 last_save_time = time.time()
                 torch.save(model.state_dict(), "{}{}_pytorch.{}".format(syspath, ball_model_name, extension))
+                # logger.info("【{}】{}模型已保存！".format(name_path[name]["name"], sub_name))
+            # run test
+            with torch.no_grad():
+                test_loss = 0.0
+                for batch in test_dataloader:
+                    x, y = batch
+                    x = x.float().to(modeling.device)
+                    y = y.float().to(modeling.device)
+                    y_pred = model(x)
+                    loss = criterion(y_pred, y)
+                    test_loss += loss.item() * x.size(0)
+                # logger.info("Epoch {}/{} Test Loss: {:.4f}".format(epoch+1, model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)], test_loss / len(test_dataset)))
+        pbar.set_description("Epoch {}/{} Loss: {:.4f} Test_Loss: {:.4f}".format(epoch+1, model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)], running_loss / len(dataset), test_loss / len(test_dataset)))
+        pbar.update(1)
     pbar.close()
     torch.save(model.state_dict(), "{}{}_pytorch.{}".format(syspath, ball_model_name, extension))
     logger.info("【{}】{}模型训练完成!".format(name_path[name]["name"], sub_name))
+    logger.info("Tran Loss: {:.4f} Test Loss: {:.4f}".format(running_loss / len(dataset), test_loss / len(test_dataset)))
 
 def action(name):
     logger.info("正在创建【{}】数据集...".format(name_path[name]["name"]))
-    red_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "red", args.cq)
-    blue_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "blue", args.cq)
+    red_train_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "red", args.cq, 0, 2021351)
+    red_test_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "red", args.cq, 1, 2021351)
+    blue_train_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "blue", args.cq, 0, 2021351)
+    blue_test_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "blue", args.cq, 1, 2021351)
     for i in range(args.epochs):
         if model_args[name]["model_args"]["red_epochs"] > 0:
             logger.info("开始训练【{}】红球模型...".format(name_path[name]["name"]))
             start_time = time.time()
-            train_ball_model(name, dataset=red_data, sub_name="红球")
+            train_ball_model(name, dataset=red_train_data, test_dataset=red_test_data, sub_name="红球")
             logger.info("训练耗时: {:.4f}".format(time.time() - start_time))
 
         if name not in ["pls", "kl8"] and model_args[name]["model_args"]["blue_epochs"] > 0:
             logger.info("开始训练【{}】蓝球模型...".format(name_path[name]["name"]))
             start_time = time.time()
             # train_blue_ball_model(name, x_data=train_data["blue"]["x_data"], y_data=train_data["blue"]["y_data"])
-            train_ball_model(name, dataset=blue_data, sub_name="蓝球")
+            train_ball_model(name, dataset=blue_train_data, test_dataset=blue_test_data, sub_name="蓝球")
             logger.info("训练耗时: {:.4f}".format(time.time() - start_time))
 
 

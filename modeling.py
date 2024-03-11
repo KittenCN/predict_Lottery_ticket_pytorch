@@ -10,6 +10,9 @@ import torch.utils.data as Data
 import numpy as np
 from torch.utils.data import  Dataset
 
+import  os
+os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class PositionalEncoding(nn.Module):
@@ -26,27 +29,29 @@ class PositionalEncoding(nn.Module):
         self.register_buffer('pe', pe)
 
     def forward(self, x):
-        x = x + self.pe[:x.size(0), :].unsqueeze(-2).expand(-1, -1, x.size(2), -1)
+        x = x + self.pe[:x.size(0), :]
         return self.dropout(x)
 
 
 class Transformer_Model(nn.Module): 
-    def __init__(self, input_size, output_size, hidden_size=512, num_layers=6, num_heads=16, dropout_prob=0.001, d_model=128):
+    def __init__(self, input_size, output_size=20, hidden_size=1024, num_layers=8, num_heads=16, dropout=0.1, d_model=128, windows_size=5):
         super(Transformer_Model, self).__init__()
 
-        self.embedding = nn.Embedding(input_size, hidden_size)
+        self.embedding = nn.Embedding(input_size * windows_size, hidden_size)
         self.positional_encoding = PositionalEncoding(hidden_size)
-        self.transformer_layer = nn.TransformerEncoderLayer(d_model=hidden_size, nhead=num_heads, dropout=dropout_prob)
+        self.transformer_layer = nn.TransformerEncoderLayer(d_model=hidden_size, nhead=num_heads, dropout=dropout)
         self.transformer_encoder = nn.TransformerEncoder(
             self.transformer_layer,
             num_layers)
         self.linear = nn.Linear(hidden_size, output_size)
 
     def forward(self, x):
-        x = x.int()
+        x = x.int() # (batch_size, windows_size, seq_len)
+        x = x.view(x.size(0), -1) # (batch_size, windows_size * seq_len)
+        x = x.permute(1, 0) # (seq_len, batch_size)
         embedded = self.embedding(x)
-        positional_encoded = self.positional_encoding(embedded)
-        transformer_encoded = self.transformer_encoder(positional_encoded)
+        positional_encoded = self.positional_encoding(embedded) 
+        transformer_encoded = self.transformer_encoder(positional_encoded)  # (seq_len, batch_size, hidden_size)
         linear_out = self.linear(transformer_encoded.mean(dim=1))
         return linear_out.squeeze(1)
 
@@ -110,7 +115,7 @@ class MyDataset(Dataset):
 
 # 定义 Transformer 模型类
 class TransformerModel(nn.Module):
-    def __init__(self, input_size, output_size=20, hidden_size=512, num_layers=6, num_heads=10, dropout=0.001, d_model=128):
+    def __init__(self, input_size, output_size=20, hidden_size=1024, num_layers=8, num_heads=10, dropout=0.1, d_model=128, windows_size=5):
         super().__init__()
         self.transformer = nn.Transformer(
             d_model=input_size,
@@ -120,11 +125,13 @@ class TransformerModel(nn.Module):
             dim_feedforward=hidden_size,
             dropout=dropout
         )
+        self.dropout = nn.Dropout(dropout)  # 添加 dropout 层
         self.linear = nn.Linear(input_size, output_size)
     
     def forward(self, x):
         x = x.permute(1, 0, 2) # 将输入序列转置为 (seq_len, batch_size, input_size)
         x = self.transformer(x, x) # 使用 Transformer 进行编码和解码
+        x = self.dropout(x)  # 在 Transformer 后添加 dropout
         x = x.permute(1, 0, 2) # 将输出序列转置为 (batch_size, seq_len, input_size)
         x = self.linear(x) # 对输出进行线性变换(batch_size, seq_len, output_size)
         x = x[:, -1, :] # 取最后一个时间步的输出作为模型的输出(batch_size, output_size)
