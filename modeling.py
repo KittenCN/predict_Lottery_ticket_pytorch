@@ -43,6 +43,7 @@ class Transformer_Model(nn.Module):
         self.transformer_encoder = nn.TransformerEncoder(
             self.transformer_layer,
             num_layers)
+        self.dropout = nn.Dropout(dropout)  # 添加 dropout 层
         self.linear = nn.Linear(hidden_size, output_size)
 
     def forward(self, x):
@@ -52,6 +53,7 @@ class Transformer_Model(nn.Module):
         embedded = self.embedding(x)
         positional_encoded = self.positional_encoding(embedded) 
         transformer_encoded = self.transformer_encoder(positional_encoded)  # (seq_len, batch_size, hidden_size)
+        transformer_encoded = self.dropout(transformer_encoded)
         linear_out = self.linear(transformer_encoded.mean(dim=1))
         return linear_out.squeeze(1)
 
