@@ -71,17 +71,20 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     test_loss = 0.0
     for epoch in range(model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]):
         running_loss = 0.0
+        running_times = 0
         for batch in dataloader:
+            running_times += 1
             x, y = batch
             x = x.float().to(modeling.device)
             y = y.float().to(modeling.device)
             y_pred = model(x)
-            loss = criterion(y_pred, y)
+            t_loss = criterion(y_pred, y)
             optimizer.zero_grad()
-            loss.backward()
+            t_loss.backward()
             lr_scheduler.step()
             optimizer.step()
-            running_loss += loss.item() * x.size(0)
+            # running_loss += t_loss.item() * x.size(0)
+            running_loss += t_loss.item()
         # print(f"Epoch {epoch+1}: Loss = {running_loss / len(dataset):.4f}")
         if (epoch + 1) % save_epoch == 0:
             if time.time() - last_save_time > save_interval:
@@ -91,20 +94,23 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
             # run test
             with torch.no_grad():
                 test_loss = 0.0
+                test_times = 0
                 for batch in test_dataloader:
+                    test_times += 1
                     x, y = batch
                     x = x.float().to(modeling.device)
                     y = y.float().to(modeling.device)
                     y_pred = model(x)
-                    loss = criterion(y_pred, y)
-                    test_loss += loss.item() * x.size(0)
+                    tt_loss = criterion(y_pred, y)
+                    # test_loss += tt_loss.item() * x.size(0)
+                    test_loss += tt_loss.item()
                 # logger.info("Epoch {}/{} Test Loss: {:.4f}".format(epoch+1, model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)], test_loss / len(test_dataset)))
-        pbar.set_description("Epoch {}/{} Loss: {:.4f} Test_Loss: {:.4f}".format(epoch+1, model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)], running_loss / len(dataset), test_loss / len(test_dataset)))
+        pbar.set_description("Avg_Loss: {:.4f} Test_Loss: {:.4f}".format(running_loss / running_times, test_loss / test_times))
         pbar.update(1)
     pbar.close()
     torch.save(model.state_dict(), "{}{}_pytorch.{}".format(syspath, ball_model_name, extension))
     logger.info("【{}】{}模型训练完成!".format(name_path[name]["name"], sub_name))
-    logger.info("Tran Loss: {:.4f} Test Loss: {:.4f}".format(running_loss / len(dataset), test_loss / len(test_dataset)))
+    logger.info("Tran Loss: {:.4f} Test Loss: {:.4f}".format(running_loss / running_times, test_loss / test_times))
 
 def action(name):
     logger.info("正在创建【{}】数据集...".format(name_path[name]["name"]))
