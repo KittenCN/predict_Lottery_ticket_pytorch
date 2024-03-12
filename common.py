@@ -357,7 +357,7 @@ def run_predict(window_size, sequence_len, hidden_size=128, num_layers=8, num_he
             current_number = get_current_number(mini_args.name)
             logger.info("【{}】最近一期:{}".format(name_path[mini_args.name]["name"], current_number))
             logger.info("正在创建【{}】数据集...".format(name_path[mini_args.name]["name"]))
-            data = create_train_data(mini_args.name, model_args[mini_args.name]["model_args"]["windows_size"], 1, balls, mini_args.cq)
+            data = create_train_data(mini_args.name, model_args[mini_args.name]["model_args"]["windows_size"], 1, sub_name_eng, mini_args.cq)
             y_pred, name_list = predict_ball_model(mini_args.name, data, sequence_len, sub_name, window_size,hidden_size=hidden_size, num_layers=num_layers, num_heads=num_heads, input_size=input_size, output_size=output_size)
             y_pred_list = y_pred.cpu().tolist()
             logger.info("预测{}结果为: \n".format(sub_name))
