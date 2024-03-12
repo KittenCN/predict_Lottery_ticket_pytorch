@@ -14,9 +14,9 @@ import torch.optim as optim
 import modeling
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from common import create_train_data, FocalLoss
+from common import create_train_data
 from tqdm import tqdm
-
+from torch.utils.tensorboard import SummaryWriter   # to print to tensorboard
 
 warnings.filterwarnings('ignore')
 
@@ -33,12 +33,16 @@ parser.add_argument('--download_data', default=1, type=int, help="是否下载�
 parser.add_argument('--hidden_size', default=32, type=int, help="hidden_size")
 parser.add_argument('--num_layers', default=8, type=int, help="num_layers")
 parser.add_argument('--num_heads', default=16, type=int, help="num_heads")
+parser.add_argument('--tensorboard', default=0, type=int, help="tensorboard switch")
 args = parser.parse_args()
 
 pred_key = {}
 save_epoch = 10
 save_interval = 60
 last_save_time = time.time()
+
+if args.tensorboard == 1:
+    writer = SummaryWriter('../tf-logs')
 
 def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     """ 模型训练
@@ -108,8 +112,13 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
                     # test_loss += tt_loss.item() * x.size(0)
                     test_loss += tt_loss.item()
                 # logger.info("Epoch {}/{} Test Loss: {:.4f}".format(epoch+1, model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)], test_loss / len(test_dataset)))
+        if args.tensorboard == 1:
+            writer.add_scalar('Running_Loss', running_loss / (running_times if running_times > 0 else 1), epoch)
+            writer.add_scalar('Test_Loss', test_loss / (test_times if test_times > 0 else 1), epoch)
         pbar.set_description("Avg_Loss: {:.4f} Test_Loss: {:.4f}".format(running_loss / (running_times if running_times > 0 else 1), test_loss / (test_times if test_times > 0 else 1)))
         pbar.update(1)
+    if args.tensorboard == 1:
+        writer.close()
     pbar.close()
     torch.save(model.state_dict(), "{}{}_pytorch.{}".format(syspath, ball_model_name, extension))
     logger.info("【{}】{}模型训练完成!".format(name_path[name]["name"], sub_name))
