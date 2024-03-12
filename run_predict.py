@@ -4,11 +4,9 @@ Author: BigCat
 Modifier: KittenCN
 """
 import argparse
-import datetime
 from config import *
 from loguru import logger
 from common import setMiniargs, get_current_number, run_predict, init
-import pandas as pd
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--name', default="kl8", type=str, help="选择训练数据")

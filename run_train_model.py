@@ -5,19 +5,16 @@ Author: KittenCN
 import os
 import time
 import argparse
-import numpy as np
-import pandas as pd
 import warnings
 from config import *
 from loguru import logger
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import numpy as np
 import modeling
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from common import create_train_data, setMiniargs
+from common import create_train_data, FocalLoss
 from tqdm import tqdm
 
 
@@ -67,6 +64,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
         model.load_state_dict(torch.load("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)))
         logger.info("已加载{}模型！".format(sub_name))
     criterion = nn.MSELoss()
+    # criterion = FocalLoss(gamma=2.0)
     optimizer = optim.Adam(model.parameters(), lr=0.01, weight_decay=0.01)
     lr_scheduler=modeling.CustomSchedule(d_model=20*m_args["model_args"]["windows_size"], optimizer=optimizer)
     pbar = tqdm(range(model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]))

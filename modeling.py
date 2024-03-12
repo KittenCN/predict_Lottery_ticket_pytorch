@@ -49,13 +49,13 @@ class Transformer_Model(nn.Module):
     def forward(self, x):
         x = x.int() # (batch_size, windows_size, seq_len)
         x = x.view(x.size(0), -1) # (batch_size, windows_size * seq_len)
-        x = x.permute(1, 0) # (seq_len, batch_size)
-        embedded = self.embedding(x)
+        embedded = self.embedding(x) #(batch_size, seq_len, hidden_size)
+        embedded = embedded.permute(1, 0, 2) # (seq_len, batch_size, hidden_size)
         positional_encoded = self.positional_encoding(embedded) 
         transformer_encoded = self.transformer_encoder(positional_encoded)  # (seq_len, batch_size, hidden_size)
         transformer_encoded = self.dropout(transformer_encoded)
-        linear_out = self.linear(transformer_encoded.mean(dim=1))
-        return linear_out.squeeze(1)
+        linear_out = self.linear(transformer_encoded.mean(dim=0))
+        return linear_out
 
 def train_model(model, data, labels, num_epochs, batch_size, learning_rate, device):
     dataset = Data.TensorDataset(data, labels)
@@ -112,7 +112,7 @@ class MyDataset(Dataset):
     def __getitem__(self, idx):
         # 将每组数据分为输入序列和目标序列
         x = self.data[idx][1:]
-        y = self.data[idx][0].reshape(1, 20)
+        y = self.data[idx][0]
         return x, y
 
 # 定义 Transformer 模型类

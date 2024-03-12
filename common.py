@@ -2,11 +2,14 @@
 """
 Author: KittenCN
 """
+from math import log
 import requests
 import pandas as pd
 from bs4 import BeautifulSoup
 from loguru import logger
 import torch
+from torch import nn
+import torch.nn.functional as F
 from config import *
 import datetime
 import numpy as np
@@ -18,6 +21,23 @@ filedata = []
 filetitle = []
 pred_key_d = {}
 mini_args = {}
+
+class FocalLoss(nn.Module):
+    def __init__(self, gamma=2.0, alpha=0.25):
+        super(FocalLoss, self).__init__()
+        self.gamma = gamma
+        self.alpha = alpha
+
+    def forward(self, inputs, targets):
+        # 输入：inputs (模型预测，shape: [batch_size, num_classes]), 
+        # targets (真实标签，shape: [batch_size, num_classes], 独热编码)
+
+        BCE_loss = F.binary_cross_entropy_with_logits(inputs, targets, reduction='none')
+        targets = targets.type(torch.float32)
+        at = self.alpha * targets + (1 - self.alpha) * (1 - targets)  # alpha系数调整
+        pt = torch.exp(-BCE_loss)  # 转换为概率
+        F_loss = at * (1 - pt) ** self.gamma * BCE_loss
+        return F_loss.mean()
 
 def create_train_data(name, windows, dataset=0, ball_type="red", cq=0, test_flag=0, test_begin=2021351):
     """ 创建训练数据
