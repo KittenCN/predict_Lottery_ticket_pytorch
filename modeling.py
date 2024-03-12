@@ -70,7 +70,7 @@ def decode_one_hot(one_hot_encoded_data):
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class PositionalEncoding(nn.Module):
-    def __init__(self, d_model, dropout_prob=0.1, max_len=5000):
+    def __init__(self, d_model, dropout_prob=0.1, max_len=10000):
         super(PositionalEncoding, self).__init__()
         self.dropout = nn.Dropout(p=dropout_prob)
 
@@ -91,7 +91,7 @@ class Transformer_Model(nn.Module):
     def __init__(self, input_size, output_size=20, hidden_size=1024, num_layers=8, num_heads=16, dropout=0.1, d_model=128, windows_size=5):
         super(Transformer_Model, self).__init__()
 
-        self.embedding = nn.Embedding(input_size * windows_size, hidden_size)
+        self.embedding = nn.Embedding(input_size, hidden_size)
         self.positional_encoding = PositionalEncoding(hidden_size)
         self.transformer_layer = nn.TransformerEncoderLayer(d_model=hidden_size, nhead=num_heads, dropout=dropout)
         self.transformer_encoder = nn.TransformerEncoder(
@@ -167,9 +167,9 @@ class MyDataset(Dataset):
         # 将每组数据分为输入序列和目标序列
         x = torch.from_numpy(self.data[idx][1:][::-1].copy())
         y = torch.from_numpy(self.data[idx][0].copy()).unsqueeze(0)
-        # x_hot = one_hot_encode_array(x) # 显存不够。。。
+        x_hot = one_hot_encode_array(x) # 显存不够。。。
         y_hot = one_hot_encode_array(y)
-        return x, y_hot
+        return x_hot, y_hot
 
 # 定义 Transformer 模型类
 class TransformerModel(nn.Module):
