@@ -113,8 +113,9 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
                     test_loss += tt_loss.item()
                 # logger.info("Epoch {}/{} Test Loss: {:.4f}".format(epoch+1, model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)], test_loss / len(test_dataset)))
         if args.tensorboard == 1:
-            writer.add_scalar('Running_Loss', running_loss / (running_times if running_times > 0 else 1), epoch)
-            writer.add_scalar('Test_Loss', test_loss / (test_times if test_times > 0 else 1), epoch)
+            writer.add_scalar('Loss/Running', running_loss / (running_times if running_times > 0 else 1), epoch)
+            if (epoch + 1) % save_epoch == 0:
+                writer.add_scalar('Loss/Test', test_loss / (test_times if test_times > 0 else 1), epoch)
         pbar.set_description("Avg_Loss: {:.4f} Test_Loss: {:.4f}".format(running_loss / (running_times if running_times > 0 else 1), test_loss / (test_times if test_times > 0 else 1)))
         pbar.update(1)
     if args.tensorboard == 1:
