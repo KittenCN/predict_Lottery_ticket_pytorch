@@ -107,7 +107,7 @@ class Transformer_Model(nn.Module):
         embedded = embedded.permute(1, 0, 2) # (seq_len, batch_size, hidden_size)
         positional_encoded = self.positional_encoding(embedded) 
         transformer_encoded = self.transformer_encoder(positional_encoded)  # (seq_len, batch_size, hidden_size)
-        transformer_encoded = self.dropout(transformer_encoded)
+        # transformer_encoded = self.dropout(transformer_encoded)
         linear_out = self.linear(transformer_encoded.mean(dim=0))
         return linear_out
 
