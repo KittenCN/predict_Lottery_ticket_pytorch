@@ -9,9 +9,63 @@ import torch.optim as optim
 import torch.utils.data as Data
 import numpy as np
 from torch.utils.data import  Dataset
+import torch.nn.functional as F
 
 import  os
 os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
+
+def one_hot_encode_array(input_array, num_classes=80):
+    """
+    Convert an input array of shape (windows_size, seq_len) to a one-hot encoded tensor of shape (windows_size, seq_len, num_classes).
+    
+    Parameters:
+    - input_array: An array of shape (windows_size, seq_len), where each row represents a time step and each element in the row represents a selected number.
+    - num_classes: The total number of possible classes (e.g., 1 to 80).
+    
+    Returns:
+    - A one-hot encoded tensor of shape (windows_size, seq_len, num_classes).
+    """
+    windows_size, seq_len = input_array.shape
+    # Initialize a tensor of zeros with the desired output shape
+    one_hot_encoded_array = torch.zeros((windows_size, seq_len, num_classes), dtype=torch.float32)
+    
+    # Encode each number in the input_array
+    for i in range(windows_size):
+        for j in range(seq_len):
+            number = input_array[i, j]
+            if 1 <= number <= num_classes:
+                one_hot_encoded_array[i, j, number - 1] = 1.0  # Adjust index for 0-based indexing
+    
+    return one_hot_encoded_array
+
+def decode_one_hot(one_hot_encoded_data):
+    """
+    Decode one-hot encoded data back to its original numerical representation.
+    
+    Parameters:
+    - one_hot_encoded_data: A 1D tensor or array of one-hot encoded data with length a multiple of 80.
+    
+    Returns:
+    - A list of decoded numbers, where each number corresponds to the position of 1 in each 80-length segment.
+    """
+    # Ensure the input is a torch tensor
+    if not isinstance(one_hot_encoded_data, torch.Tensor):
+        one_hot_encoded_data = torch.tensor(one_hot_encoded_data)
+    
+    # Check if the data length is a multiple of 80
+    assert one_hot_encoded_data.numel() % 80 == 0, "The total number of data points must be a multiple of 80."
+    
+    # Reshape the data to have shape (-1, 80), where each row is one 80-length segment
+    reshaped_data = one_hot_encoded_data.view(-1, 80)
+    
+    # Decode each segment
+    decoded_numbers = []
+    for segment in reshaped_data:
+        # Find the index of the maximum value in each segment, adjust by 1 for 1-based indexing
+        decoded_number = torch.argmax(segment).item() + 1
+        decoded_numbers.append(decoded_number)
+    
+    return decoded_numbers
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -111,9 +165,11 @@ class MyDataset(Dataset):
     
     def __getitem__(self, idx):
         # 将每组数据分为输入序列和目标序列
-        x = self.data[idx][1:]
-        y = self.data[idx][0]
-        return x, y
+        x = torch.from_numpy(self.data[idx][1:][::-1].copy())
+        y = torch.from_numpy(self.data[idx][0].copy()).unsqueeze(0)
+        # x_hot = one_hot_encode_array(x) # 显存不够。。。
+        y_hot = one_hot_encode_array(y)
+        return x, y_hot
 
 # 定义 Transformer 模型类
 class TransformerModel(nn.Module):
