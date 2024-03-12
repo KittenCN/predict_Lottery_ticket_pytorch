@@ -69,7 +69,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
         logger.info("已加载{}模型！".format(sub_name))
     criterion = nn.MSELoss()
     # criterion = FocalLoss(gamma=2.0)
-    optimizer = optim.Adam(model.parameters(), lr=0.01, weight_decay=0.001)
+    optimizer = optim.Adam(model.parameters(), lr=0.01)
     lr_scheduler=modeling.CustomSchedule(d_model=20*m_args["model_args"]["windows_size"], optimizer=optimizer)
     pbar = tqdm(range(model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]))
     running_loss = 0.0
