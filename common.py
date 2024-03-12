@@ -42,7 +42,7 @@ class FocalLoss(nn.Module):
         F_loss = at * (1 - pt) ** self.gamma * BCE_loss
         return F_loss.mean()
 
-def create_train_data(name, windows, dataset=0, ball_type="red", cq=0, test_flag=0, test_begin=2021351):
+def create_train_data(name, windows, dataset=0, ball_type="red", cq=0, test_flag=0, test_begin=2021351, f_data=0):
     """ 创建训练数据
     :param name: 玩法，双色球/大乐透
     :param windows: 训练窗口
@@ -57,10 +57,14 @@ def create_train_data(name, windows, dataset=0, ball_type="red", cq=0, test_flag
         else:
             ori_data = pd.read_csv("{}{}".format(name_path[name]["path"], data_file_name))
     data = ori_data.copy()
-    if test_flag == 0:
-        data = data[data['期数'] > test_begin]
+    if f_data == 0:
+        if test_flag == 0:
+            data = data[data['期数'] > test_begin]
+        else:
+            data = data[data['期数'] <= test_begin]
     else:
-        data = data[data['期数'] <= test_begin]
+        data = data[data['期数'] <= f_data]
+        data = data.head(windows + 1)
     if not len(data):
         raise logger.error(" 请执行 get_data.py 进行数据下载！")
     else:
@@ -340,7 +344,7 @@ def predict_ball_model(name, dataset, sequence_len, sub_name="红球", window_si
         y_pred = model(x.float())
     return y_pred, name_list
 
-def run_predict(window_size, sequence_len, hidden_size=128, num_layers=8, num_heads=16, input_size=20, output_size=20):
+def run_predict(window_size, sequence_len, hidden_size=128, num_layers=8, num_heads=16, input_size=20, output_size=20, f_data=0):
     global pred_key_d
     balls = ['red', 'blue'] if mini_args.name not in ["pls", "kl8"] else ['red']
     for sub_name_eng in balls:
@@ -357,7 +361,7 @@ def run_predict(window_size, sequence_len, hidden_size=128, num_layers=8, num_he
             current_number = get_current_number(mini_args.name)
             logger.info("【{}】最近一期:{}".format(name_path[mini_args.name]["name"], current_number))
             logger.info("正在创建【{}】数据集...".format(name_path[mini_args.name]["name"]))
-            data = create_train_data(mini_args.name, model_args[mini_args.name]["model_args"]["windows_size"], 1, sub_name_eng, mini_args.cq)
+            data = create_train_data(mini_args.name, model_args[mini_args.name]["model_args"]["windows_size"], 1, sub_name_eng, mini_args.cq,f_data=f_data)
             y_pred, name_list = predict_ball_model(mini_args.name, data, sequence_len, sub_name, window_size,hidden_size=hidden_size, num_layers=num_layers, num_heads=num_heads, input_size=input_size, output_size=output_size)
             y_pred_list = y_pred.cpu().tolist()
             logger.info("预测{}结果为: \n".format(sub_name))
