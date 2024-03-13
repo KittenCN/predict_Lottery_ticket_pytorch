@@ -68,8 +68,8 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     if os.path.exists("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)):
         model.load_state_dict(torch.load("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)))
         logger.info("已加载{}模型！".format(sub_name))
-    criterion = nn.MSELoss()
-    # criterion = FocalLoss(gamma=2.0)
+    # criterion = nn.MSELoss()
+    criterion = nn.BCEWithLogitsLoss() # 二分类交叉熵
     optimizer = optim.Adam(model.parameters(), lr=0.01)
     lr_scheduler=modeling.CustomSchedule(d_model=base_size*m_args["model_args"]["windows_size"], optimizer=optimizer)
     pbar = tqdm(range(model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]))
