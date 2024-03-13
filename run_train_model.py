@@ -25,15 +25,16 @@ parser.add_argument('--name', default="kl8", type=str, help="选择训练数据"
 parser.add_argument('--windows_size', default='5', type=str, help="训练窗口大小,如有多个，用'，'隔开")
 parser.add_argument('--red_epochs', default=100, type=int, help="红球训练轮数")
 parser.add_argument('--blue_epochs', default=1, type=int, help="蓝球训练轮数")
-parser.add_argument('--batch_size', default=8, type=int, help="集合数量")
+parser.add_argument('--batch_size', default=32, type=int, help="集合数量")
 parser.add_argument('--predict_pro', default=0, type=int, help="更新batch_size")
 parser.add_argument('--epochs', default=1, type=int, help="训练轮数(红蓝球交叉训练)")
 parser.add_argument('--cq', default=0, type=int, help="是否使用出球顺序，0：不使用（即按从小到大排序），1：使用")
 parser.add_argument('--download_data', default=1, type=int, help="是否下载数据")
-parser.add_argument('--hidden_size', default=16, type=int, help="hidden_size")
-parser.add_argument('--num_layers', default=4, type=int, help="num_layers")
-parser.add_argument('--num_heads', default=4, type=int, help="num_heads")
+parser.add_argument('--hidden_size', default=32, type=int, help="hidden_size")
+parser.add_argument('--num_layers', default=8, type=int, help="num_layers")
+parser.add_argument('--num_heads', default=16, type=int, help="num_heads")
 parser.add_argument('--tensorboard', default=0, type=int, help="tensorboard switch")
+parser.add_argument('--num_workers', default=2, type=int, help="num_workers switch")
 args = parser.parse_args()
 
 pred_key = {}
@@ -60,17 +61,17 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
         os.makedirs(syspath)
     logger.info("标签数据维度: {}".format(dataset.data.shape))
 
-    dataloader = DataLoader(dataset, batch_size=model_args[args.name]["model_args"]["batch_size"], shuffle=False, num_workers=4, pin_memory=True)
-    test_dataloader = DataLoader(test_dataset, batch_size=model_args[args.name]["model_args"]["batch_size"], shuffle=False, num_workers=4, pin_memory=False)
+    dataloader = DataLoader(dataset, batch_size=model_args[args.name]["model_args"]["batch_size"], shuffle=False, num_workers=args.num_workers, pin_memory=True)
+    test_dataloader = DataLoader(test_dataset, batch_size=model_args[args.name]["model_args"]["batch_size"], shuffle=False, num_workers=args.num_workers, pin_memory=False)
     # 定义模型和优化器
-    model = modeling.Transformer_Model(input_size=20*m_args["model_args"]["windows_size"]*80, output_size=20*80, windows_size=m_args["model_args"]["windows_size"], hidden_size=args.hidden_size, num_layers=args.num_layers, num_heads=args.num_heads, dropout=0.1, d_model=128).to(modeling.device)
+    model = modeling.Transformer_Model(input_size=base_size*m_args["model_args"]["windows_size"], output_size=base_size, windows_size=m_args["model_args"]["windows_size"], hidden_size=args.hidden_size, num_layers=args.num_layers, num_heads=args.num_heads, dropout=0.1, d_model=128).to(modeling.device)
     if os.path.exists("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)):
         model.load_state_dict(torch.load("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)))
         logger.info("已加载{}模型！".format(sub_name))
     criterion = nn.MSELoss()
     # criterion = FocalLoss(gamma=2.0)
     optimizer = optim.Adam(model.parameters(), lr=0.01)
-    lr_scheduler=modeling.CustomSchedule(d_model=20*m_args["model_args"]["windows_size"], optimizer=optimizer)
+    lr_scheduler=modeling.CustomSchedule(d_model=base_size*m_args["model_args"]["windows_size"], optimizer=optimizer)
     pbar = tqdm(range(model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]))
     running_loss = 0.0
     running_times = 0

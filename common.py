@@ -366,7 +366,7 @@ def run_predict(window_size, sequence_len, hidden_size=128, num_layers=8, num_he
             y_pred_list = y_pred.cpu().tolist()
             logger.info("预测{}结果为: \n".format(sub_name))
             if mini_args.name in ["kl8"]:
-                strrow = modeling.decode_one_hot(y_pred_list)
+                strrow = modeling.binary_decode_array(y_pred_list)
                 logger.info(strrow)
             else:
                 for row in y_pred_list:

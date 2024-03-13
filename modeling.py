@@ -14,6 +14,52 @@ import torch.nn.functional as F
 import  os
 os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 
+def binary_encode_array(input_array, num_classes=80):
+    """
+    Convert an input array of shape (windows_size, seq_len) to a binary encoded tensor of shape (windows_size, num_classes).
+    
+    Parameters:
+    - input_array: An array of shape (windows_size, seq_len), where each row represents a time step and each element in the row represents a selected number.
+    - num_classes: The total number of possible classes (e.g., 1 to 80).
+    
+    Returns:
+    - A binary encoded tensor of shape (windows_size, num_classes).
+    """
+    windows_size, seq_len = input_array.shape
+    # Initialize a tensor of zeros with the desired output shape
+    binary_encoded_array = torch.zeros((windows_size, num_classes), dtype=torch.float32)
+    
+    # Encode each number in the input_array
+    for i in range(windows_size):
+        for j in range(seq_len):
+            number = input_array[i, j]
+            if 1 <= number <= num_classes:
+                binary_encoded_array[i, number - 1] = 1.0  # Adjust index for 0-based indexing
+    
+    return binary_encoded_array
+
+def binary_decode_array(binary_encoded_data):
+    """
+    Decode binary encoded data back to its original numerical representation.
+    
+    Parameters:
+    - binary_encoded_data: A 2D tensor or array of binary encoded data with shape (windows_size, num_classes).
+    
+    Returns:
+    - A list of lists, where each inner list contains the numbers decoded from each row of the binary encoded data.
+    """
+    windows_size, num_classes = binary_encoded_data.shape
+    decoded_data = []
+    
+    for i in range(windows_size):
+        decoded_row = []
+        for j in range(num_classes):
+            if binary_encoded_data[i, j] == 1:
+                decoded_row.append(j + 1)  # Adjust index for 1-based numbering
+        decoded_data.append(decoded_row)
+    
+    return decoded_data
+
 def one_hot_encode_array(input_array, num_classes=80):
     """
     Convert an input array of shape (windows_size, seq_len) to a one-hot encoded tensor of shape (windows_size, seq_len, num_classes).
@@ -70,7 +116,7 @@ def decode_one_hot(one_hot_encoded_data):
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class PositionalEncoding(nn.Module):
-    def __init__(self, d_model, dropout_prob=0.1, max_len=10000):
+    def __init__(self, d_model, dropout_prob=0.1, max_len=5000):
         super(PositionalEncoding, self).__init__()
         self.dropout = nn.Dropout(p=dropout_prob)
 
@@ -167,8 +213,8 @@ class MyDataset(Dataset):
         # 将每组数据分为输入序列和目标序列
         x = torch.from_numpy(self.data[idx][1:][::-1].copy())
         y = torch.from_numpy(self.data[idx][0].copy()).unsqueeze(0)
-        x_hot = one_hot_encode_array(x) # 显存不够。。。
-        y_hot = one_hot_encode_array(y)
+        x_hot = binary_encode_array(x) 
+        y_hot = binary_encode_array(y)
         return x_hot, y_hot
 
 # 定义 Transformer 模型类

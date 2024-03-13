@@ -43,7 +43,7 @@ if __name__ == '__main__':
             logger.info("windows_size: {}".format(list_windows_size))
         for size in list_windows_size:
             current_number = get_current_number(args.name)
-            run_predict(int(size), model_args[args.name]["model_args"]['red_sequence_len'], hidden_size=args.hidden_size, num_layers=args.num_layers, num_heads=args.num_heads, input_size=20, output_size=20*80, f_data=args.f_data)
+            run_predict(int(size), model_args[args.name]["model_args"]['red_sequence_len'], hidden_size=args.hidden_size, num_layers=args.num_layers, num_heads=args.num_heads, input_size=base_size, output_size=base_size, f_data=args.f_data)
             # _data, _title = predict_run(args.name)
         # filename = datetime.datetime.now().strftime('%Y%m%d')
         # filepath = "{}{}/".format(predict_path, args.name)
