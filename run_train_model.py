@@ -70,7 +70,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     optimizer = optim.Adam(model.parameters(), lr=0.01)
     # lr_scheduler=modeling.CustomSchedule(d_model=args.hidden_size, optimizer=optimizer)
     lr_scheduler = modeling.CustomSchedule(optimizer=optimizer, d_model=args.hidden_size, warmup_steps=model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]*0.2)
-    current_epoch = ""
+    current_epoch = 0
     if os.path.exists("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)):
         # model.load_state_dict(torch.load("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)))
         checkpoint = torch.load("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng))
@@ -78,17 +78,15 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         lr_scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
         current_epoch = checkpoint['epoch']
-        logger.info("已加载{}模型！".format(sub_name))
-    pbar = tqdm(range(model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]), ncols=100)
+        logger.info("已加载{}模型！ Epoch: {}".format(sub_name, current_epoch))
+    pbar = tqdm(range(model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]), ncols=150)
     running_loss = 0.0
     running_times = 0
     test_loss = 0.0
     test_times = 0
-    for epoch in range(model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]):
-        if current_epoch != "":
-            if epoch < current_epoch:
-                epoch = current_epoch
-                current_epoch = ""
+    for epoch in range(current_epoch, model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]):
+        if epoch == current_epoch:
+            pbar.update(current_epoch)
         running_loss = 0.0
         running_times = 0
         for batch in dataloader:
