@@ -335,7 +335,9 @@ def predict_ball_model(name, dataset, sequence_len, sub_name="红球", window_si
     # 定义模型和优化器
     model = modeling.Transformer_Model(input_size=input_size, output_size=output_size, hidden_size=hidden_size, num_layers=num_layers, num_heads=num_heads, dropout=0.1).to(modeling.device)
     if os.path.exists("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)):
-        model.load_state_dict(torch.load("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)))
+        # model.load_state_dict(torch.load("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)))
+        checkpoint = torch.load("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng))
+        model.load_state_dict(checkpoint['model_state_dict'])
         logger.info("已加载{}模型！".format(sub_name))
     for batch in dataloader:
         x, y = batch

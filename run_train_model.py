@@ -65,19 +65,30 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     test_dataloader = DataLoader(test_dataset, batch_size=model_args[args.name]["model_args"]["batch_size"], shuffle=False, num_workers=args.num_workers, pin_memory=False)
     # 定义模型和优化器
     model = modeling.Transformer_Model(input_size=base_size*m_args["model_args"]["windows_size"], output_size=base_size, hidden_size=args.hidden_size, num_layers=args.num_layers, num_heads=args.num_heads, dropout=0.1).to(modeling.device)
-    if os.path.exists("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)):
-        model.load_state_dict(torch.load("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)))
-        logger.info("已加载{}模型！".format(sub_name))
     # criterion = nn.MSELoss()
     criterion = nn.BCEWithLogitsLoss() # 二分类交叉熵
     optimizer = optim.Adam(model.parameters(), lr=0.01)
-    lr_scheduler=modeling.CustomSchedule(d_model=args.hidden_size, optimizer=optimizer)
-    pbar = tqdm(range(model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]))
+    # lr_scheduler=modeling.CustomSchedule(d_model=args.hidden_size, optimizer=optimizer)
+    lr_scheduler = modeling.CustomSchedule(optimizer=optimizer, d_model=args.hidden_size, warmup_steps=model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]*0.2)
+    current_epoch = ""
+    if os.path.exists("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)):
+        # model.load_state_dict(torch.load("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)))
+        checkpoint = torch.load("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng))
+        model.load_state_dict(checkpoint['model_state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        lr_scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+        current_epoch = checkpoint['epoch']
+        logger.info("已加载{}模型！".format(sub_name))
+    pbar = tqdm(range(model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]), ncols=100)
     running_loss = 0.0
     running_times = 0
     test_loss = 0.0
     test_times = 0
     for epoch in range(model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]):
+        if current_epoch != "":
+            if epoch < current_epoch:
+                epoch = current_epoch
+                current_epoch = ""
         running_loss = 0.0
         running_times = 0
         for batch in dataloader:
@@ -89,15 +100,24 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
             t_loss = criterion(y_pred, y.view(y.size(0), -1))
             optimizer.zero_grad()
             t_loss.backward()
-            lr_scheduler.step()
             optimizer.step()
             # running_loss += t_loss.item() * x.size(0)
             running_loss += t_loss.item()
         # print(f"Epoch {epoch+1}: Loss = {running_loss / len(dataset):.4f}")
+        lr_scheduler.step()
         if (epoch + 1) % save_epoch == 0:
             if time.time() - last_save_time > save_interval:
                 last_save_time = time.time()
-                torch.save(model.state_dict(), "{}{}_pytorch.{}".format(syspath, ball_model_name, extension))
+                model_state_dict = model.state_dict()
+                optimizer_state_dict = optimizer.state_dict()
+                scheduler_state_dict = lr_scheduler.state_dict() 
+                save_dict = {
+                    'model_state_dict': model_state_dict,
+                    'optimizer_state_dict': optimizer_state_dict,
+                    'scheduler_state_dict': scheduler_state_dict,
+                    'epoch': epoch
+                }
+                torch.save(save_dict, "{}{}_pytorch.{}".format(syspath, ball_model_name, extension))
                 # logger.info("【{}】{}模型已保存！".format(name_path[name]["name"], sub_name))
             # run test
             with torch.no_grad():
@@ -122,7 +142,16 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     if args.tensorboard == 1:
         writer.close()
     pbar.close()
-    torch.save(model.state_dict(), "{}{}_pytorch.{}".format(syspath, ball_model_name, extension))
+    model_state_dict = model.state_dict()
+    optimizer_state_dict = optimizer.state_dict()
+    scheduler_state_dict = lr_scheduler.state_dict() 
+    save_dict = {
+        'model_state_dict': model_state_dict,
+        'optimizer_state_dict': optimizer_state_dict,
+        'scheduler_state_dict': scheduler_state_dict,
+        'epoch': epoch
+    }
+    torch.save(save_dict, "{}{}_pytorch.{}".format(syspath, ball_model_name, extension))
     logger.info("【{}】{}模型训练完成!".format(name_path[name]["name"], sub_name))
     logger.info("Tran Loss: {:.4f} Test Loss: {:.4f}".format(running_loss / (running_times if running_times > 0 else 1), test_loss / (test_times if test_times > 0 else 1)))
 

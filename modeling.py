@@ -9,6 +9,7 @@ import torch.optim as optim
 import torch.utils.data as Data
 import numpy as np
 from torch.utils.data import  Dataset
+from torch.optim.lr_scheduler import _LRScheduler
 import torch.nn.functional as F
 
 import  os
@@ -128,7 +129,7 @@ def decode_one_hot(one_hot_encoded_data):
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class PositionalEncoding(nn.Module):
-    def __init__(self, d_model, dropout_prob=0.1, max_len=5000):
+    def __init__(self, d_model, dropout_prob=0.1, max_len=500):
         super(PositionalEncoding, self).__init__()
         self.dropout = nn.Dropout(p=dropout_prob)
 
@@ -163,9 +164,10 @@ class Transformer_Model(nn.Module):
         x = x.view(x.size(0), -1) # (batch_size, windows_size * seq_len)
         embedded = self.embedding(x) #(batch_size, seq_len, hidden_size)
         embedded = embedded.permute(1, 0, 2) # (seq_len, batch_size, hidden_size)
+        embedded = self.dropout(embedded)
         positional_encoded = self.positional_encoding(embedded) 
         transformer_encoded = self.transformer_encoder(positional_encoded)  # (seq_len, batch_size, hidden_size)
-        # transformer_encoded = self.dropout(transformer_encoded)
+        transformer_encoded = self.dropout(transformer_encoded)
         linear_out = self.linear(transformer_encoded.mean(dim=0))
         return linear_out
 
@@ -189,22 +191,17 @@ def train_model(model, data, labels, num_epochs, batch_size, learning_rate, devi
         epoch_loss /= len(dataset)
         print('Epoch [{}/{}], Loss: {:.4f}'.format(epoch+1, num_epochs, epoch_loss))
 
-class CustomSchedule(object):
-    def __init__(self, d_model, warmup_steps=4000, optimizer=None):
-        super(CustomSchedule, self).__init__()
-        self.d_model = torch.tensor(d_model, dtype=torch.float32)
+class CustomSchedule(_LRScheduler):
+    def __init__(self, optimizer, d_model, warmup_steps=4000, last_epoch=-1):
+        self.d_model = d_model
         self.warmup_steps = warmup_steps
-        self.optimizer = optimizer
-        self.steps = 1
-    
-    def step(self):
-        arg1 = self.steps ** -0.5
-        arg2 = self.steps * (self.warmup_steps ** -1.5)
-        self.steps += 1
+        super(CustomSchedule, self).__init__(optimizer, last_epoch)
+
+    def get_lr(self):
+        arg1 = (self._step_count) ** -0.5
+        arg2 = self._step_count * (self.warmup_steps ** -1.5)
         lr = (self.d_model ** -0.5) * min(arg1, arg2)
-        for param_group in self.optimizer.param_groups:
-            param_group['lr'] = lr
-        return lr
+        return [lr for group in self.optimizer.param_groups]
 
 # 定义数据集类
 class MyDataset(Dataset):
