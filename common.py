@@ -333,7 +333,7 @@ def predict_ball_model(name, dataset, sequence_len, sub_name="红球", window_si
     dataloader = DataLoader(dataset, batch_size=1, shuffle=False)
 
     # 定义模型和优化器
-    model = modeling.Transformer_Model(input_size=input_size, output_size=output_size, windows_size=m_args["model_args"]["windows_size"], hidden_size=hidden_size, num_layers=num_layers, num_heads=num_heads, dropout=0.1, d_model=128).to(modeling.device)
+    model = modeling.Transformer_Model(input_size=input_size, output_size=output_size, hidden_size=hidden_size, num_layers=num_layers, num_heads=num_heads, dropout=0.1).to(modeling.device)
     if os.path.exists("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)):
         model.load_state_dict(torch.load("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)))
         logger.info("已加载{}模型！".format(sub_name))
