@@ -14,8 +14,8 @@ parser.add_argument('--windows_size', default='5', type=str, help="训练窗口�
 parser.add_argument('--cq', default=0, type=int, help="是否使用出球顺序，0：不使用（即按从小到大排序），1：使用")
 parser.add_argument('--batch_size', default=32, type=int, help="集合数量")
 parser.add_argument('--hidden_size', default=512, type=int, help="hidden_size")
-parser.add_argument('--num_layers', default=64, type=int, help="num_layers")
-parser.add_argument('--num_heads', default=64, type=int, help="num_heads")
+parser.add_argument('--num_layers', default=6, type=int, help="num_layers")
+parser.add_argument('--num_heads', default=8, type=int, help="num_heads")
 parser.add_argument('--f_data', default=0, type=int, help="指定预测期数")
 args = parser.parse_args()
 
