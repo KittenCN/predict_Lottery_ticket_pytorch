@@ -151,7 +151,7 @@ class Transformer_Model(nn.Module):
         super(Transformer_Model, self).__init__()
 
         self.embedding = nn.Embedding(input_size, hidden_size)
-        self.positional_encoding = PositionalEncoding(hidden_size, max_len=input_size*1.2)
+        self.positional_encoding = PositionalEncoding(hidden_size, max_len=int(input_size*1.2))
         self.transformer_layer = nn.TransformerEncoderLayer(d_model=hidden_size, nhead=num_heads, dropout=dropout)
         self.transformer_encoder = nn.TransformerEncoder(
             self.transformer_layer,
