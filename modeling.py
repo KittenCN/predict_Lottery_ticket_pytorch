@@ -150,7 +150,7 @@ class Transformer_Model(nn.Module):
     def __init__(self, input_size, output_size=20, hidden_size=512, num_layers=8, num_heads=16, dropout=0.1):
         super(Transformer_Model, self).__init__()
 
-        self.embedding = nn.Embedding(input_size, hidden_size)
+        self.embedding = nn.Embedding(input_size, hidden_size, max_len=input_size*1.2)
         self.positional_encoding = PositionalEncoding(hidden_size)
         self.transformer_layer = nn.TransformerEncoderLayer(d_model=hidden_size, nhead=num_heads, dropout=dropout)
         self.transformer_encoder = nn.TransformerEncoder(
