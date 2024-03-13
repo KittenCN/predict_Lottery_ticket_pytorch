@@ -52,7 +52,8 @@ def binary_decode_array(binary_encoded_data, threshold=0.25, top_k=20):
     Returns:
     - A list of lists, where each inner list contains the numbers of the top_k selected classes based on the threshold.
     """
-    sigmoid = torch.sigmoid(binary_encoded_data)  # Convert raw scores to probabilities
+    # sigmoid = torch.sigmoid(binary_encoded_data)  # Convert raw scores to probabilities
+    sigmoid = binary_encoded_data
     windows_size, num_classes = sigmoid.shape
     decoded_data = []
     
@@ -169,6 +170,7 @@ class Transformer_Model(nn.Module):
         transformer_encoded = self.transformer_encoder(positional_encoded)  # (seq_len, batch_size, hidden_size)
         transformer_encoded = self.dropout(transformer_encoded)
         linear_out = self.linear(transformer_encoded.mean(dim=0))
+        linear_out = torch.sigmoid(linear_out)
         return linear_out
 
 def train_model(model, data, labels, num_epochs, batch_size, learning_rate, device):

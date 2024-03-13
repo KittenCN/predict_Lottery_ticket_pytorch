@@ -35,6 +35,7 @@ parser.add_argument('--num_layers', default=6, type=int, help="num_layers")
 parser.add_argument('--num_heads', default=8, type=int, help="num_heads")
 parser.add_argument('--tensorboard', default=0, type=int, help="tensorboard switch")
 parser.add_argument('--num_workers', default=2, type=int, help="num_workers switch")
+parser.add_argument('--top_k', default=10, type=int, help="top_k switch")
 args = parser.parse_args()
 
 pred_key = {}
@@ -66,7 +67,8 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     # 定义模型和优化器
     model = modeling.Transformer_Model(input_size=base_size*m_args["model_args"]["windows_size"], output_size=base_size, hidden_size=args.hidden_size, num_layers=args.num_layers, num_heads=args.num_heads, dropout=0.1).to(modeling.device)
     # criterion = nn.MSELoss()
-    criterion = nn.BCEWithLogitsLoss() # 二分类交叉熵
+    # criterion = nn.BCEWithLogitsLoss() # 二分类交叉熵
+    criterion = nn.BCELoss() # 二分类交叉熵
     optimizer = optim.Adam(model.parameters(), lr=0.01, weight_decay=0.001)
     # lr_scheduler=modeling.CustomSchedule(d_model=args.hidden_size, optimizer=optimizer)
     lr_scheduler = modeling.CustomSchedule(optimizer=optimizer, d_model=args.hidden_size, warmup_steps=model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]*0.2)
@@ -84,6 +86,8 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     running_times = 0
     test_loss = 0.0
     test_times = 0
+    topk_loss = 0.0
+    topk_times = 0
     for epoch in range(current_epoch, model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]):
         if epoch == current_epoch:
             pbar.update(current_epoch)
@@ -118,9 +122,13 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
                 torch.save(save_dict, "{}{}_pytorch.{}".format(syspath, ball_model_name, extension))
                 # logger.info("【{}】{}模型已保存！".format(name_path[name]["name"], sub_name))
             # run test
+            model.eval()
             with torch.no_grad():
                 test_loss = 0.0
                 test_times = 0
+                topk_loss = 0.0
+                topk_times = 0
+                total_correct = 0.0
                 for batch in test_dataloader:
                     test_times += 1
                     x, y = batch
@@ -129,13 +137,20 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
                     y_pred = model(x)
                     tt_loss = criterion(y_pred, y.view(y.size(0), -1))
                     # test_loss += tt_loss.item() * x.size(0)
-                    test_loss += tt_loss.item()
+                    test_loss += tt_loss.item(x)
+                    # calculate topk loss
+                    probs, indices = torch.topk(y.view(y.size(0), -1), args.top_k, dim=1)
+                    for i in range(x.size(0)):
+                        topk_times += args.top_k
+                        target_indices = y[i].nonzero(as_tuple=False).squeeze()
+                        total_correct += sum([1 for j in indices[i] if j in target_indices])
                 # logger.info("Epoch {}/{} Test Loss: {:.4f}".format(epoch+1, model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)], test_loss / len(test_dataset)))
+            topk_loss = 1 - total_correct / (topk_times if topk_times > 0 else 1)
         if args.tensorboard == 1:
             writer.add_scalar('Loss/Running', running_loss / (running_times if running_times > 0 else 1), epoch)
             if (epoch + 1) % save_epoch == 0:
                 writer.add_scalar('Loss/Test', test_loss / (test_times if test_times > 0 else 1), epoch)
-        pbar.set_description("Avg_Loss: {:.4f} Test_Loss: {:.4f}".format(running_loss / (running_times if running_times > 0 else 1), test_loss / (test_times if test_times > 0 else 1)))
+        pbar.set_description("ALoss:{:.4f} TLoss:{:.4f} {}-KLoss:{:.4f}".format(running_loss / (running_times if running_times > 0 else 1), test_loss / (test_times if test_times > 0 else 1), args.top_k, topk_loss))
         pbar.update(1)
     if args.tensorboard == 1:
         writer.close()
@@ -151,7 +166,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     }
     torch.save(save_dict, "{}{}_pytorch.{}".format(syspath, ball_model_name, extension))
     logger.info("【{}】{}模型训练完成!".format(name_path[name]["name"], sub_name))
-    logger.info("Tran Loss: {:.4f} Test Loss: {:.4f}".format(running_loss / (running_times if running_times > 0 else 1), test_loss / (test_times if test_times > 0 else 1)))
+    logger.info("ALoss:{:.4f} TLoss:{:.4f} {}-KLoss:{:.4f}".format(running_loss / (running_times if running_times > 0 else 1), test_loss / (test_times if test_times > 0 else 1), args.top_k, topk_loss))
 
 def action(name):
     logger.info("正在创建【{}】数据集...".format(name_path[name]["name"]))
