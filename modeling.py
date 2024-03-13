@@ -38,28 +38,40 @@ def binary_encode_array(input_array, num_classes=80):
     
     return binary_encoded_array
 
-def binary_decode_array(binary_encoded_data):
+def binary_decode_array(binary_encoded_data, threshold=0.25, top_k=20):
     """
-    Decode binary encoded data back to its original numerical representation.
+    Decode binary encoded data back to its original numerical representation,
+    selecting the top_k classes with probabilities exceeding a given threshold.
     
     Parameters:
     - binary_encoded_data: A 2D tensor or array of binary encoded data with shape (windows_size, num_classes).
+    - threshold: A float representing the cutoff threshold for determining whether a class is selected.
+    - top_k: The number of highest probability classes to select after applying the threshold.
     
     Returns:
-    - A list of lists, where each inner list contains the numbers decoded from each row of the binary encoded data.
+    - A list of lists, where each inner list contains the numbers of the top_k selected classes based on the threshold.
     """
-    windows_size, num_classes = binary_encoded_data.shape
+    sigmoid = torch.sigmoid(binary_encoded_data)  # Convert raw scores to probabilities
+    windows_size, num_classes = sigmoid.shape
     decoded_data = []
     
     for i in range(windows_size):
-        decoded_row = []
-        for j in range(num_classes):
-            if binary_encoded_data[i, j] == 1:
-                decoded_row.append(j + 1)  # Adjust index for 1-based numbering
-        decoded_data.append(decoded_row)
+        # Apply threshold and get indices of classes with probabilities above the threshold
+        above_threshold_indices = (sigmoid[i] > threshold).nonzero(as_tuple=True)[0]
+        if len(above_threshold_indices) > 0:
+            # Get probabilities of classes above the threshold
+            probs = sigmoid[i][above_threshold_indices]
+            # Sort these probabilities and select the top_k
+            top_k_indices = probs.topk(min(top_k, len(probs)), largest=True).indices
+            selected_indices = above_threshold_indices[top_k_indices]
+            # Adjust indices for 1-based numbering and append to the result
+            decoded_row = (selected_indices + 1).tolist()
+            decoded_data.append(decoded_row)
+        else:
+            # If no class probability exceeds the threshold, append an empty list
+            decoded_data.append([])
     
     return decoded_data
-
 def one_hot_encode_array(input_array, num_classes=80):
     """
     Convert an input array of shape (windows_size, seq_len) to a one-hot encoded tensor of shape (windows_size, seq_len, num_classes).

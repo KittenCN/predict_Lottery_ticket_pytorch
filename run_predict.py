@@ -13,10 +13,10 @@ parser.add_argument('--name', default="kl8", type=str, help="选择训练数据"
 parser.add_argument('--windows_size', default='5', type=str, help="训练窗口大小,如有多个，用'，'隔开")
 parser.add_argument('--cq', default=0, type=int, help="是否使用出球顺序，0：不使用（即按从小到大排序），1：使用")
 parser.add_argument('--batch_size', default=32, type=int, help="集合数量")
-parser.add_argument('--hidden_size', default=32, type=int, help="hidden_size")
-parser.add_argument('--num_layers', default=8, type=int, help="num_layers")
-parser.add_argument('--num_heads', default=16, type=int, help="num_heads")
-parser.add_argument('--f_data', default=0, type=int, help="f_data")
+parser.add_argument('--hidden_size', default=512, type=int, help="hidden_size")
+parser.add_argument('--num_layers', default=64, type=int, help="num_layers")
+parser.add_argument('--num_heads', default=64, type=int, help="num_heads")
+parser.add_argument('--f_data', default=0, type=int, help="指定预测期数")
 args = parser.parse_args()
 
 if __name__ == '__main__':
@@ -44,7 +44,7 @@ if __name__ == '__main__':
             logger.info("windows_size: {}".format(list_windows_size))
         for size in list_windows_size:
             current_number = get_current_number(args.name)
-            run_predict(int(size), model_args[args.name]["model_args"]['red_sequence_len'], hidden_size=args.hidden_size, num_layers=args.num_layers, num_heads=args.num_heads, input_size=base_size, output_size=base_size, f_data=args.f_data)
+            run_predict(int(size), model_args[args.name]["model_args"]['red_sequence_len'], hidden_size=args.hidden_size, num_layers=args.num_layers, num_heads=args.num_heads, input_size=base_size*int(size), output_size=base_size, f_data=args.f_data)
             # _data, _title = predict_run(args.name)
         # filename = datetime.datetime.now().strftime('%Y%m%d')
         # filepath = "{}{}/".format(predict_path, args.name)

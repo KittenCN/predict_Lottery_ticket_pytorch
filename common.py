@@ -363,12 +363,16 @@ def run_predict(window_size, sequence_len, hidden_size=128, num_layers=8, num_he
             logger.info("正在创建【{}】数据集...".format(name_path[mini_args.name]["name"]))
             data = create_train_data(mini_args.name, model_args[mini_args.name]["model_args"]["windows_size"], 1, sub_name_eng, mini_args.cq,f_data=f_data)
             y_pred, name_list = predict_ball_model(mini_args.name, data, sequence_len, sub_name, window_size,hidden_size=hidden_size, num_layers=num_layers, num_heads=num_heads, input_size=input_size, output_size=output_size)
-            y_pred_list = y_pred.cpu().tolist()
             logger.info("预测{}结果为: \n".format(sub_name))
             if mini_args.name in ["kl8"]:
-                strrow = modeling.binary_decode_array(y_pred_list)
-                logger.info(strrow)
+                y_pred_list = modeling.binary_decode_array(y_pred.cpu(), threshold=0.25, top_k=80)
+                for row in y_pred_list:
+                    logger.info("超过阈值的数据: {}".format(row))
+                    row_limit = row[0:20]
+                    logger.info("前20位超过阈值的数据: {}".format(row_limit))
+                    logger.info("排序后前20位超过阈值的数据: {}".format(sorted(row_limit)))
             else:
+                y_pred_list = y_pred.cpu().tolist()
                 for row in y_pred_list:
                     strrow = ""
                     for col in row:
