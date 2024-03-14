@@ -137,9 +137,9 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
                     y_pred = model(x)
                     tt_loss = criterion(y_pred, y.view(y.size(0), -1))
                     # test_loss += tt_loss.item() * x.size(0)
-                    test_loss += tt_loss.item(x)
+                    test_loss += tt_loss.item()
                     # calculate topk loss
-                    probs, indices = torch.topk(y.view(y.size(0), -1), args.top_k, dim=1)
+                    probs, indices = torch.topk(y_pred, args.top_k, dim=1)
                     for i in range(x.size(0)):
                         topk_times += args.top_k
                         target_indices = y[i].nonzero(as_tuple=False).squeeze()
