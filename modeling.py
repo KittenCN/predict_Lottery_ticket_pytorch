@@ -165,10 +165,10 @@ class Transformer_Model(nn.Module):
         x = x.view(x.size(0), -1) # (batch_size, windows_size * seq_len)
         embedded = self.embedding(x) #(batch_size, seq_len, hidden_size)
         embedded = embedded.permute(1, 0, 2) # (seq_len, batch_size, hidden_size)
-        embedded = self.dropout(embedded)
+        # embedded = self.dropout(embedded)
         positional_encoded = self.positional_encoding(embedded) 
         transformer_encoded = self.transformer_encoder(positional_encoded)  # (seq_len, batch_size, hidden_size)
-        transformer_encoded = self.dropout(transformer_encoded)
+        # transformer_encoded = self.dropout(transformer_encoded)
         linear_out = self.linear(transformer_encoded.mean(dim=0))
         linear_out = torch.sigmoid(linear_out)
         return linear_out

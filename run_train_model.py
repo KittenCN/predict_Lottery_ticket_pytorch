@@ -69,7 +69,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     # criterion = nn.MSELoss()
     # criterion = nn.BCEWithLogitsLoss() # 二分类交叉熵
     criterion = nn.BCELoss() # 二分类交叉熵
-    optimizer = optim.Adam(model.parameters(), lr=0.01, weight_decay=0.001)
+    optimizer = optim.Adam(model.parameters(), lr=0.01)
     # lr_scheduler=modeling.CustomSchedule(d_model=args.hidden_size, optimizer=optimizer)
     lr_scheduler = modeling.CustomSchedule(optimizer=optimizer, d_model=args.hidden_size, warmup_steps=model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]*0.2)
     current_epoch = 0
