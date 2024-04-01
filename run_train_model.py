@@ -36,6 +36,7 @@ parser.add_argument('--num_heads', default=8, type=int, help="num_heads")
 parser.add_argument('--tensorboard', default=0, type=int, help="tensorboard switch")
 parser.add_argument('--num_workers', default=2, type=int, help="num_workers switch")
 parser.add_argument('--top_k', default=10, type=int, help="top_k switch")
+parser.add_argument('--model', default='Transformer', type=str, help="model name")
 args = parser.parse_args()
 
 pred_key = {}
@@ -45,6 +46,11 @@ last_save_time = time.time()
 
 if args.tensorboard == 1:
     writer = SummaryWriter('../tf-logs')
+
+if args.model == "Transformer":
+    _model = modeling.Transformer_Model
+elif args.model == "LSTM":
+    _model = modeling.LSTM_Model
 
 def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     """ 模型训练
@@ -65,7 +71,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     dataloader = DataLoader(dataset, batch_size=model_args[args.name]["model_args"]["batch_size"], shuffle=False, num_workers=args.num_workers, pin_memory=True)
     test_dataloader = DataLoader(test_dataset, batch_size=model_args[args.name]["model_args"]["batch_size"], shuffle=False, num_workers=args.num_workers, pin_memory=False)
     # 定义模型和优化器
-    model = modeling.Transformer_Model(input_size=base_size*m_args["model_args"]["windows_size"], output_size=base_size, hidden_size=args.hidden_size, num_layers=args.num_layers, num_heads=args.num_heads, dropout=0.1).to(modeling.device)
+    model = _model(input_size=base_size*m_args["model_args"]["windows_size"], output_size=base_size, hidden_size=args.hidden_size, num_layers=args.num_layers, num_heads=args.num_heads, dropout=0.1).to(modeling.device)
     # criterion = nn.MSELoss()
     # criterion = nn.BCEWithLogitsLoss() # 二分类交叉熵
     criterion = nn.BCELoss() # 二分类交叉熵
@@ -73,9 +79,9 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     # lr_scheduler=modeling.CustomSchedule(d_model=args.hidden_size, optimizer=optimizer)
     lr_scheduler = modeling.CustomSchedule(optimizer=optimizer, d_model=args.hidden_size, warmup_steps=model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]*0.2)
     current_epoch = 0
-    if os.path.exists("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)):
+    if os.path.exists("{}{}_ball_model_pytorch_{}.ckpt".format(syspath, sub_name_eng, args.model)):
         # model.load_state_dict(torch.load("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)))
-        checkpoint = torch.load("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng))
+        checkpoint = torch.load("{}{}_ball_model_pytorch_{}.ckpt".format(syspath, sub_name_eng, args.model))
         model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         lr_scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
@@ -121,7 +127,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
                     'scheduler_state_dict': scheduler_state_dict,
                     'epoch': epoch
                 }
-                torch.save(save_dict, "{}{}_pytorch.{}".format(syspath, ball_model_name, extension))
+                torch.save(save_dict, "{}{}_pytorch_{}.{}".format(syspath, ball_model_name, args.model, extension))
                 # logger.info("【{}】{}模型已保存！".format(name_path[name]["name"], sub_name))
             # run test
             model.eval()
@@ -177,7 +183,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
         'scheduler_state_dict': scheduler_state_dict,
         'epoch': epoch
     }
-    torch.save(save_dict, "{}{}_pytorch.{}".format(syspath, ball_model_name, extension))
+    torch.save(save_dict, "{}{}_pytorch_{}.{}".format(syspath, ball_model_name, args.model, extension))
     logger.info("【{}】{}模型训练完成!".format(name_path[name]["name"], sub_name))
     logger.info("ALoss:{:.4f} TLoss:{:.4f} {}-KLoss:{:.4f} 20-KLoss:{:.4f}".format(running_loss / (running_times if running_times > 0 else 1), test_loss / (test_times if test_times > 0 else 1), args.top_k, topk_loss, top20_loss))
 
