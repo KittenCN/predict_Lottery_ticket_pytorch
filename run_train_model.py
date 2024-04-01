@@ -102,6 +102,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
         running_loss = 0.0
         running_times = 0
         for batch in dataloader:
+            model.train()
             running_times += 1
             x, y = batch
             x = x.float().to(modeling.device)
