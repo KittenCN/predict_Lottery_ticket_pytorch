@@ -177,16 +177,13 @@ class LSTM_Model(nn.Module):
     def __init__(self, input_size, output_size=20, hidden_size=512, num_layers=1, num_heads=16,dropout=0.1):
         super(LSTM_Model, self).__init__()
 
-        self.embedding = nn.Embedding(input_size, hidden_size)
-        self.lstm = nn.LSTM(hidden_size, hidden_size, num_layers, dropout=dropout, batch_first=True)
+        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, dropout=dropout, batch_first=True)
         self.dropout = nn.Dropout(dropout)
         self.linear = nn.Linear(hidden_size, output_size)
 
     def forward(self, x):
-        x = x.int() # (batch_size, windows_size, seq_len)
-        x = x.view(x.size(0), -1) # (batch_size, windows_size * seq_len)
-        embedded = self.embedding(x) #(batch_size, seq_len, hidden_size)
-        lstm_out, _ = self.lstm(embedded)  # (batch_size, seq_len, hidden_size)
+        # LSTM 层
+        lstm_out, _ = self.lstm(x)  # (batch_size, seq_len, input_size)
         lstm_out = self.dropout(lstm_out)
         # 取最后一个时间步的输出
         lstm_out = lstm_out[:, -1, :]  # (batch_size, hidden_size)
