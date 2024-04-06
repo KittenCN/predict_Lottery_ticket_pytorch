@@ -98,12 +98,13 @@ def one_hot_encode_array(input_array, num_classes=80):
     
     return one_hot_encoded_array
 
-def decode_one_hot(one_hot_encoded_data):
+def decode_one_hot(one_hot_encoded_data, sort_by_max_value=False):
     """
     Decode one-hot encoded data back to its original numerical representation.
     
     Parameters:
     - one_hot_encoded_data: A 1D tensor or array of one-hot encoded data with length a multiple of 80.
+    - sort_by_max_value: A boolean indicating whether to sort the output by the maximum value in each segment.
     
     Returns:
     - A list of decoded numbers, where each number corresponds to the position of 1 in each 80-length segment.
@@ -120,10 +121,17 @@ def decode_one_hot(one_hot_encoded_data):
     
     # Decode each segment
     decoded_numbers = []
+    max_values = []
     for segment in reshaped_data:
         # Find the index of the maximum value in each segment, adjust by 1 for 1-based indexing
-        decoded_number = torch.argmax(segment).item() + 1
+        max_value, max_index = torch.max(segment, dim=0)
+        decoded_number = max_index.item() + 1
         decoded_numbers.append(decoded_number)
+        max_values.append(max_value.item())
+    
+    # Sort the decoded numbers by the maximum value in each segment if required
+    if sort_by_max_value:
+        decoded_numbers = [x for _, x in sorted(zip(max_values, decoded_numbers), reverse=True)]
     
     return decoded_numbers
 

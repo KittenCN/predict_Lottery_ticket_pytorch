@@ -168,7 +168,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
                             tatal20_correct += sum([1 for j in indices[i] if j in target_indices])
                     elif args.model == "LSTM":
                         for i in range(x.size(0)):
-                            _ele = modeling.decode_one_hot(y_pred[i])
+                            _ele = modeling.decode_one_hot(y_pred[i], sort_by_max_value=True)
                             topk_times += args.top_k
                             top20_times += 20
                             # target_indices = y[i].nonzero(as_tuple=False).squeeze()

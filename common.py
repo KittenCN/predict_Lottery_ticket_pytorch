@@ -311,7 +311,7 @@ def init():
     pred_key_d = {}
     mini_args = {}
 
-def predict_ball_model(name, dataset, sequence_len, sub_name="红球", window_size=1, hidden_size=128, num_layers=8, num_heads=16, input_size=20, output_size=20, model="Transformer"):
+def predict_ball_model(name, dataset, sequence_len, sub_name="红球", window_size=1, hidden_size=128, num_layers=8, num_heads=16, input_size=20, output_size=20, model_name="Transformer"):
     """ 模型训练
     :param name: 玩法
     :param x_data: 训练样本
@@ -333,14 +333,14 @@ def predict_ball_model(name, dataset, sequence_len, sub_name="红球", window_si
     dataloader = DataLoader(dataset, batch_size=1, shuffle=False)
 
     # 定义模型和优化器
-    if model == "Transformer":
+    if model_name == "Transformer":
         _model = modeling.Transformer_Model
-    elif model == "LSTM":
+    elif model_name == "LSTM":
         _model = modeling.LSTM_Model
     model = _model(input_size=input_size, output_size=output_size, hidden_size=hidden_size, num_layers=num_layers, num_heads=num_heads, dropout=0.1).to(modeling.device)
-    if os.path.exists("{}{}_ball_model_pytorch_{}.ckpt".format(syspath, sub_name_eng, model)):
+    if os.path.exists("{}{}_ball_model_pytorch_{}.ckpt".format(syspath, sub_name_eng, model_name)):
         # model.load_state_dict(torch.load("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)))
-        checkpoint = torch.load("{}{}_ball_model_pytorch_{}.ckpt".format(syspath, sub_name_eng, model))
+        checkpoint = torch.load("{}{}_ball_model_pytorch_{}.ckpt".format(syspath, sub_name_eng, model_name))
         model.load_state_dict(checkpoint['model_state_dict'])
         logger.info("已加载{}模型！".format(sub_name))
     for batch in dataloader:
@@ -367,20 +367,22 @@ def run_predict(window_size, sequence_len, hidden_size=128, num_layers=8, num_he
             current_number = get_current_number(mini_args.name)
             logger.info("【{}】最近一期:{}".format(name_path[mini_args.name]["name"], current_number))
             logger.info("正在创建【{}】数据集...".format(name_path[mini_args.name]["name"]))
-            data = create_train_data(mini_args.name, model_args[mini_args.name]["model_args"]["windows_size"], 1, sub_name_eng, mini_args.cq,f_data=f_data)
-            y_pred, name_list = predict_ball_model(mini_args.name, data, sequence_len, sub_name, window_size,hidden_size=hidden_size, num_layers=num_layers, num_heads=num_heads, input_size=input_size, output_size=output_size, model=model)
+            data = create_train_data(mini_args.name, model_args[mini_args.name]["model_args"]["windows_size"], 1, sub_name_eng, mini_args.cq,f_data=f_data, model=model)
+            y_pred, name_list = predict_ball_model(mini_args.name, data, sequence_len, sub_name, window_size,hidden_size=hidden_size, num_layers=num_layers, num_heads=num_heads, input_size=input_size, output_size=output_size, model_name=model)
             logger.info("预测{}结果为: \n".format(sub_name))
             if mini_args.name in ["kl8"]:
                 if model == "Transformer":
                     y_pred_list = modeling.binary_decode_array(y_pred.cpu(), threshold=0.25, top_k=80)
-                elif model == "LSTM":
-                    y_pred_list = modeling.decode_one_hot(y_pred.cpu())
-                for row in y_pred_list:
-                    row_limit = row[0:20]
-                    if model == "Transformer":
+                    for row in y_pred_list:
+                        row_limit = row[0:20]
                         logger.info("超过阈值的数据: {}".format(row))
                         logger.info("前20位超过阈值的数据: {}".format(row_limit))
-                    logger.info("排序后前20位超过阈值的数据: {}".format(sorted(row_limit)))
+                        logger.info("排序后前20位超过阈值的数据: {}".format(sorted(row_limit)))
+                elif model == "LSTM":
+                    y_pred_list = modeling.decode_one_hot(y_pred.cpu(), sort_by_max_value=True)
+                    logger.info("前20位超过阈值的数据: {}".format(y_pred_list))
+                    logger.info("排序后前20位超过阈值的数据: {}".format(sorted(y_pred_list)))
+                
             else:
                 y_pred_list = y_pred.cpu().tolist()
                 for row in y_pred_list:
