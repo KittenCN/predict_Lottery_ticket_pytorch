@@ -37,6 +37,7 @@ parser.add_argument('--tensorboard', default=0, type=int, help="tensorboard swit
 parser.add_argument('--num_workers', default=2, type=int, help="num_workers switch")
 parser.add_argument('--top_k', default=10, type=int, help="top_k switch")
 parser.add_argument('--model', default='Transformer', type=str, help="model name")
+parser.add_argument('--lr', default=0.01, type=float, help="learning rate")
 args = parser.parse_args()
 
 pred_key = {}
@@ -78,7 +79,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     # criterion = nn.MSELoss()
     # criterion = nn.BCEWithLogitsLoss() # 二分类交叉熵
     criterion = nn.BCELoss() # 二分类交叉熵
-    optimizer = optim.Adam(model.parameters(), lr=0.01)
+    optimizer = optim.Adam(model.parameters(), lr=args.model)
     # lr_scheduler=modeling.CustomSchedule(d_model=args.hidden_size, optimizer=optimizer)
     lr_scheduler = modeling.CustomSchedule(optimizer=optimizer, d_model=args.hidden_size, warmup_steps=model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]*0.2)
     current_epoch = 0
