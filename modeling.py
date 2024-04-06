@@ -183,6 +183,7 @@ class LSTM_Model(nn.Module):
 
     def forward(self, x):
         # LSTM 层
+        x = x.view(x.size(0), x.size(1), -1)
         lstm_out, _ = self.lstm(x)  # (batch_size, seq_len, input_size)
         lstm_out = self.dropout(lstm_out)
         # 取最后一个时间步的输出
@@ -225,7 +226,7 @@ class CustomSchedule(_LRScheduler):
 
 # 定义数据集类
 class MyDataset(Dataset):
-    def __init__(self, data, windows, cut_num):
+    def __init__(self, data, windows, cut_num, model='Transformer'):
         tmp = []
         for i in range(len(data) - windows):
             if cut_num > 0:
@@ -234,6 +235,7 @@ class MyDataset(Dataset):
                 sub_data = data[i:(i+windows+1), cut_num:]
             tmp.append(sub_data.reshape(windows+1, cut_num))
         self.data = np.array(tmp)
+        self.model = model
     
     def __len__(self):
         return len(self.data) - 1
@@ -242,8 +244,12 @@ class MyDataset(Dataset):
         # 将每组数据分为输入序列和目标序列
         x = torch.from_numpy(self.data[idx][1:][::-1].copy())
         y = torch.from_numpy(self.data[idx][0].copy()).unsqueeze(0)
-        x_hot = binary_encode_array(x) 
-        y_hot = binary_encode_array(y)
+        if self.model == 'Transformer':
+            x_hot = binary_encode_array(x) 
+            y_hot = binary_encode_array(y)
+        elif self.model == 'LSTM':
+            x_hot = one_hot_encode_array(x)
+            y_hot = one_hot_encode_array(y)
         return x_hot, y_hot
 
 # 定义 Transformer 模型类 (废除不用)

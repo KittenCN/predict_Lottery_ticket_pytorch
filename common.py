@@ -42,7 +42,7 @@ class FocalLoss(nn.Module):
         F_loss = at * (1 - pt) ** self.gamma * BCE_loss
         return F_loss.mean()
 
-def create_train_data(name, windows, dataset=0, ball_type="red", cq=0, test_flag=0, test_begin=2021351, f_data=0):
+def create_train_data(name, windows, dataset=0, ball_type="red", cq=0, test_flag=0, test_begin=2021351, f_data=0, model="Transformer"):
     """ 创建训练数据
     :param name: 玩法，双色球/大乐透
     :param windows: 训练窗口
@@ -99,9 +99,9 @@ def create_train_data(name, windows, dataset=0, ball_type="red", cq=0, test_flag
         }
     else:
         if ball_type == "red":
-            dataset = modeling.MyDataset(data, windows, cut_num)
+            dataset = modeling.MyDataset(data, windows, cut_num, model)
         else:
-            dataset = modeling.MyDataset(data, windows, cut_num * -1)
+            dataset = modeling.MyDataset(data, windows, cut_num * -1, model)
         logger.info(strball + strflag + "集数据维度: {}".format(dataset.data.shape))
         return dataset
 
@@ -371,11 +371,15 @@ def run_predict(window_size, sequence_len, hidden_size=128, num_layers=8, num_he
             y_pred, name_list = predict_ball_model(mini_args.name, data, sequence_len, sub_name, window_size,hidden_size=hidden_size, num_layers=num_layers, num_heads=num_heads, input_size=input_size, output_size=output_size, model=model)
             logger.info("预测{}结果为: \n".format(sub_name))
             if mini_args.name in ["kl8"]:
-                y_pred_list = modeling.binary_decode_array(y_pred.cpu(), threshold=0.25, top_k=80)
+                if model == "Transformer":
+                    y_pred_list = modeling.binary_decode_array(y_pred.cpu(), threshold=0.25, top_k=80)
+                elif model == "LSTM":
+                    y_pred_list = modeling.decode_one_hot(y_pred.cpu())
                 for row in y_pred_list:
-                    logger.info("超过阈值的数据: {}".format(row))
                     row_limit = row[0:20]
-                    logger.info("前20位超过阈值的数据: {}".format(row_limit))
+                    if model == "Transformer":
+                        logger.info("超过阈值的数据: {}".format(row))
+                        logger.info("前20位超过阈值的数据: {}".format(row_limit))
                     logger.info("排序后前20位超过阈值的数据: {}".format(sorted(row_limit)))
             else:
                 y_pred_list = y_pred.cpu().tolist()

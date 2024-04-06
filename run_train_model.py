@@ -72,9 +72,9 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     test_dataloader = DataLoader(test_dataset, batch_size=model_args[args.name]["model_args"]["batch_size"], shuffle=False, num_workers=args.num_workers, pin_memory=False)
     # 定义模型和优化器
     if args.model == "Transformer":
-        model = _model(input_size=base_size*m_args["model_args"]["windows_size"], output_size=base_size, hidden_size=args.hidden_size, num_layers=args.num_layers, num_heads=args.num_heads, dropout=0.1).to(modeling.device)
+        model = _model(input_size=m_args["model_args"]["red_n_class"]*m_args["model_args"]["windows_size"], output_size=m_args["model_args"]["red_n_class"], hidden_size=args.hidden_size, num_layers=args.num_layers, num_heads=args.num_heads, dropout=0.1).to(modeling.device)
     elif args.model == "LSTM":
-        model = _model(input_size=base_size, output_size=base_size, hidden_size=args.hidden_size, num_layers=args.num_layers, num_heads=args.num_heads, dropout=0.1).to(modeling.device)
+        model = _model(input_size=m_args["model_args"]["red_sequence_len"]*m_args["model_args"]["red_n_class"], output_size=m_args["model_args"]["red_sequence_len"]*m_args["model_args"]["red_n_class"], hidden_size=args.hidden_size, num_layers=args.num_layers, num_heads=args.num_heads, dropout=0.1).to(modeling.device)
     # criterion = nn.MSELoss()
     # criterion = nn.BCEWithLogitsLoss() # 二分类交叉熵
     criterion = nn.BCELoss() # 二分类交叉熵
@@ -154,16 +154,26 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
                     # test_loss += tt_loss.item() * x.size(0)
                     test_loss += tt_loss.item()
                     # calculate topk loss
-                    probs, indices = torch.topk(y_pred, args.top_k, dim=1)
-                    for i in range(x.size(0)):
-                        topk_times += args.top_k
-                        target_indices = y[i].nonzero(as_tuple=False).squeeze()
-                        total_correct += sum([1 for j in indices[i] if j in target_indices])
-                    probs, indices = torch.topk(y_pred, 20, dim=1)
-                    for i in range(x.size(0)):
-                        top20_times += 20
-                        target_indices = y[i].nonzero(as_tuple=False).squeeze()
-                        tatal20_correct += sum([1 for j in indices[i] if j in target_indices])
+                    if args.model == "Transformer":
+                        probs, indices = torch.topk(y_pred, args.top_k, dim=1)
+                        for i in range(x.size(0)):
+                            topk_times += args.top_k
+                            target_indices = y[i].nonzero(as_tuple=False).squeeze()
+                            total_correct += sum([1 for j in indices[i] if j in target_indices])
+                        probs, indices = torch.topk(y_pred, 20, dim=1)
+                        for i in range(x.size(0)):
+                            top20_times += 20
+                            target_indices = y[i].nonzero(as_tuple=False).squeeze()
+                            tatal20_correct += sum([1 for j in indices[i] if j in target_indices])
+                    elif args.model == "LSTM":
+                        for i in range(x.size(0)):
+                            _ele = modeling.decode_one_hot(y_pred[i])
+                            topk_times += args.top_k
+                            top20_times += 20
+                            # target_indices = y[i].nonzero(as_tuple=False).squeeze()
+                            target_indices = modeling.decode_one_hot(y[i])
+                            total_correct += sum([1 for j in _ele[0:args.top_k] if j in target_indices])
+                            tatal20_correct += sum([1 for j in _ele if j in target_indices])
                 # logger.info("Epoch {}/{} Test Loss: {:.4f}".format(epoch+1, model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)], test_loss / len(test_dataset)))
             topk_loss = 1 - total_correct / (topk_times if topk_times > 0 else 1)
             top20_loss = 1 - tatal20_correct / (top20_times if top20_times > 0 else 1)
@@ -193,11 +203,11 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
 
 def action(name):
     logger.info("正在创建【{}】数据集...".format(name_path[name]["name"]))
-    red_train_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "red", args.cq, 0, 2021351)
-    red_test_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "red", args.cq, 1, 2021351)
+    red_train_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "red", args.cq, 0, 2021351, model=args.model)
+    red_test_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "red", args.cq, 1, 2021351, model=args.model)
     if name not in ["kl8"]:
-        blue_train_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "blue", args.cq, 0, 2021351)
-        blue_test_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "blue", args.cq, 1, 2021351)
+        blue_train_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "blue", args.cq, 0, 2021351, model=args.model)
+        blue_test_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "blue", args.cq, 1, 2021351, model=args.model)
     for i in range(args.epochs):
         if model_args[name]["model_args"]["red_epochs"] > 0:
             logger.info("开始训练【{}】红球模型...".format(name_path[name]["name"]))
