@@ -182,8 +182,8 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
             if (epoch + 1) % save_epoch == 0:
                 writer.add_scalar('Loss/Test', test_loss / (test_times if test_times > 0 else 1), epoch)
                 writer.add_scalar('Loss/TopK{}'.format(args.top_k), topk_loss, epoch)
-                writer.add_scalar('Loss/Top20', top20_loss, epoch)
-        pbar.set_description("ALoss:{:.4f} TLoss:{:.4f} {}-KLoss:{:.4f} 20-KLoss:{:.4f}".format(running_loss / (running_times if running_times > 0 else 1), test_loss / (test_times if test_times > 0 else 1), args.top_k, topk_loss, top20_loss))
+                writer.add_scalar('Loss/TopK20', top20_loss, epoch)
+        pbar.set_description("ALoss:{:.4f} TLoss:{:.4f} KLoss-{}:{:.4f} KLoss-20:{:.4f}".format(running_loss / (running_times if running_times > 0 else 1), test_loss / (test_times if test_times > 0 else 1), args.top_k, topk_loss, top20_loss))
         pbar.update(1)
     if args.tensorboard == 1:
         writer.close()
