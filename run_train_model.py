@@ -11,6 +11,7 @@ import torch.nn as nn
 import torch.optim as optim
 import modeling
 import torch.optim as optim
+import sys
 from torch.utils.data import DataLoader
 from common import create_train_data
 from tqdm import tqdm
@@ -66,6 +67,11 @@ def save_model(model, optimizer, lr_scheduler, epoch, syspath, ball_model_name, 
         'scheduler_state_dict': scheduler_state_dict,
         'epoch': epoch,
         'start_dt': start_dt,
+        'windows_size': args.windows_size,
+        'batch_size': args.batch_size,
+        'hidden_size': args.hidden_size,
+        'num_layers': args.num_layers,
+        'num_heads': args.num_heads,
     }
     torch.save(save_dict, "{}{}_pytorch_{}{}.{}".format(syspath, ball_model_name, args.model, other, extension))
 
@@ -102,6 +108,12 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     if os.path.exists("{}{}_ball_model_pytorch_{}.ckpt".format(syspath, sub_name_eng, args.model)):
         # model.load_state_dict(torch.load("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)))
         checkpoint = torch.load("{}{}_ball_model_pytorch_{}.ckpt".format(syspath, sub_name_eng, args.model))
+        if 'windows_size' in checkpoint and 'batch_size' in checkpoint and 'hidden_size' in checkpoint and 'num_layers' in checkpoint and 'num_heads' in checkpoint:
+            if checkpoint['windows_size'] != args.windows_size or checkpoint['batch_size'] != args.batch_size or checkpoint['hidden_size'] != args.hidden_size or checkpoint['num_layers'] != args.num_layers or checkpoint['num_heads'] != args.num_heads:
+                logger.info("模型参数不一致，重新训练！")
+                sys.exit()
+        else:
+            logger.info("模型不是最新版本，建议重新训练！")
         model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         lr_scheduler.load_state_dict(checkpoint['scheduler_state_dict'])

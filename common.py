@@ -16,6 +16,7 @@ import numpy as np
 import modeling
 from torch.utils.data import DataLoader
 import urllib3
+import sys
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -311,7 +312,7 @@ def init():
     pred_key_d = {}
     mini_args = {}
 
-def predict_ball_model(name, dataset, sequence_len, sub_name="红球", window_size=1, hidden_size=128, num_layers=8, num_heads=16, input_size=20, output_size=20, model_name="Transformer"):
+def predict_ball_model(name, dataset, sequence_len, sub_name="红球", window_size=1, hidden_size=128, num_layers=8, num_heads=16, input_size=20, output_size=20, model_name="Transformer", args=None):
     """ 模型训练
     :param name: 玩法
     :param x_data: 训练样本
@@ -341,6 +342,12 @@ def predict_ball_model(name, dataset, sequence_len, sub_name="红球", window_si
     if os.path.exists("{}{}_ball_model_pytorch_{}.ckpt".format(syspath, sub_name_eng, model_name)):
         # model.load_state_dict(torch.load("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)))
         checkpoint = torch.load("{}{}_ball_model_pytorch_{}.ckpt".format(syspath, sub_name_eng, model_name))
+        if 'windows_size' in checkpoint and 'batch_size' in checkpoint and 'hidden_size' in checkpoint and 'num_layers' in checkpoint and 'num_heads' in checkpoint:
+            if checkpoint['windows_size'] != args.windows_size or checkpoint['batch_size'] != args.batch_size or checkpoint['hidden_size'] != args.hidden_size or checkpoint['num_layers'] != args.num_layers or checkpoint['num_heads'] != args.num_heads:
+                logger.info("模型参数不一致，重新训练！")
+                sys.exit()
+        else:
+            logger.info("模型不是最新版本，建议重新训练！")
         model.load_state_dict(checkpoint['model_state_dict'])
         logger.info("已加载{}模型！".format(sub_name))
     for batch in dataloader:
@@ -350,7 +357,7 @@ def predict_ball_model(name, dataset, sequence_len, sub_name="红球", window_si
         y_pred = model(x.float())
     return y_pred, name_list
 
-def run_predict(window_size, sequence_len, hidden_size=128, num_layers=8, num_heads=16, input_size=20, output_size=20, f_data=0, model="Transformer"):
+def run_predict(window_size, sequence_len, hidden_size=128, num_layers=8, num_heads=16, input_size=20, output_size=20, f_data=0, model="Transformer", args=None):
     global pred_key_d
     balls = ['red', 'blue'] if mini_args.name not in ["pls", "kl8"] else ['red']
     for sub_name_eng in balls:
@@ -368,7 +375,7 @@ def run_predict(window_size, sequence_len, hidden_size=128, num_layers=8, num_he
             logger.info("【{}】最近一期:{}".format(name_path[mini_args.name]["name"], current_number))
             logger.info("正在创建【{}】数据集...".format(name_path[mini_args.name]["name"]))
             data = create_train_data(mini_args.name, model_args[mini_args.name]["model_args"]["windows_size"], 1, sub_name_eng, mini_args.cq,f_data=f_data, model=model)
-            y_pred, name_list = predict_ball_model(mini_args.name, data, sequence_len, sub_name, window_size,hidden_size=hidden_size, num_layers=num_layers, num_heads=num_heads, input_size=input_size, output_size=output_size, model_name=model)
+            y_pred, name_list = predict_ball_model(mini_args.name, data, sequence_len, sub_name, window_size,hidden_size=hidden_size, num_layers=num_layers, num_heads=num_heads, input_size=input_size, output_size=output_size, model_name=model, args=args)
             logger.info("预测{}结果为: \n".format(sub_name))
             if mini_args.name in ["kl8"]:
                 if model == "Transformer":
