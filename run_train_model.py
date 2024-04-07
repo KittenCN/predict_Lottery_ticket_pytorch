@@ -13,7 +13,7 @@ import modeling
 import torch.optim as optim
 import sys
 from torch.utils.data import DataLoader
-from common import create_train_data
+from common import create_train_data, get_data_run
 from tqdm import tqdm
 from config import *
 from loguru import logger
@@ -289,7 +289,7 @@ if __name__ == '__main__':
     else:
         if args.download_data == 1 and args.predict_pro == 0 and int(time.strftime("%H", time.localtime())) < 20:
             logger.info("正在创建【{}】数据集...".format(name_path[args.name]["name"]))
-            # get_data_run(name=args.name, cq=args.cq)
+            get_data_run(name=args.name, cq=args.cq)
         model_args[args.name]["model_args"]["red_epochs"] = int(args.red_epochs)
         model_args[args.name]["model_args"]["blue_epochs"] = int(args.blue_epochs)
         model_args[args.name]["model_args"]["batch_size"] = int(args.batch_size)
