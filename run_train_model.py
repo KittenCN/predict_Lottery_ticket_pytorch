@@ -6,8 +6,6 @@ import os
 import time
 import argparse
 import warnings
-from config import *
-from loguru import logger
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -16,6 +14,9 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 from common import create_train_data
 from tqdm import tqdm
+from config import *
+from loguru import logger
+from datetime import datetime as dt
 from torch.utils.tensorboard import SummaryWriter   # to print to tensorboard
 
 warnings.filterwarnings('ignore')
@@ -44,6 +45,8 @@ pred_key = {}
 save_epoch = 10
 save_interval = 60
 last_save_time = time.time()
+best_score = 999999999
+start_dt = dt.now().strftime("%Y%m%d%H%M%S")
 
 if args.tensorboard == 1:
     writer = SummaryWriter('../tf-logs')
@@ -53,6 +56,19 @@ if args.model == "Transformer":
 elif args.model == "LSTM":
     _model = modeling.LSTM_Model
 
+def save_model(model, optimizer, lr_scheduler, epoch, syspath, ball_model_name, other=""):
+    model_state_dict = model.state_dict()
+    optimizer_state_dict = optimizer.state_dict()
+    scheduler_state_dict = lr_scheduler.state_dict() 
+    save_dict = {
+        'model_state_dict': model_state_dict,
+        'optimizer_state_dict': optimizer_state_dict,
+        'scheduler_state_dict': scheduler_state_dict,
+        'epoch': epoch,
+        'start_dt': start_dt,
+    }
+    torch.save(save_dict, "{}{}_pytorch_{}{}.{}".format(syspath, ball_model_name, args.model, other, extension))
+
 def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     """ 模型训练
     :param name: 玩法
@@ -60,7 +76,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     :param y_data: 训练标签
     :return:
     """
-    global last_save_time
+    global last_save_time, best_score, start_dt
     sub_name_eng = "red" if sub_name == "红球" else "blue"
     ball_model_name = red_ball_model_name if sub_name == "红球" else blue_ball_model_name
     m_args = model_args[name]
@@ -90,6 +106,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         lr_scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
         current_epoch = checkpoint['epoch']
+        start_dt = checkpoint['start_dt']
         logger.info("已加载{}模型！ Epoch: {}".format(sub_name, current_epoch))
     pbar = tqdm(range(model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]), ncols=150)
     running_loss = 0.0
@@ -123,16 +140,17 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
         if (epoch + 1) % save_epoch == 0:
             if time.time() - last_save_time > save_interval:
                 last_save_time = time.time()
-                model_state_dict = model.state_dict()
-                optimizer_state_dict = optimizer.state_dict()
-                scheduler_state_dict = lr_scheduler.state_dict() 
-                save_dict = {
-                    'model_state_dict': model_state_dict,
-                    'optimizer_state_dict': optimizer_state_dict,
-                    'scheduler_state_dict': scheduler_state_dict,
-                    'epoch': epoch
-                }
-                torch.save(save_dict, "{}{}_pytorch_{}.{}".format(syspath, ball_model_name, args.model, extension))
+                save_model(model, optimizer, lr_scheduler, epoch, syspath, ball_model_name)
+                # model_state_dict = model.state_dict()
+                # optimizer_state_dict = optimizer.state_dict()
+                # scheduler_state_dict = lr_scheduler.state_dict() 
+                # save_dict = {
+                #     'model_state_dict': model_state_dict,
+                #     'optimizer_state_dict': optimizer_state_dict,
+                #     'scheduler_state_dict': scheduler_state_dict,
+                #     'epoch': epoch
+                # }
+                # torch.save(save_dict, "{}{}_pytorch_{}.{}".format(syspath, ball_model_name, args.model, extension))
                 # logger.info("【{}】{}模型已保存！".format(name_path[name]["name"], sub_name))
             # run test
             model.eval()
@@ -175,32 +193,36 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
                             target_indices = modeling.decode_one_hot(y[i])
                             total_correct += sum([1 for j in _ele[0:args.top_k] if j in target_indices])
                             tatal20_correct += sum([1 for j in _ele if j in target_indices])
-                # logger.info("Epoch {}/{} Test Loss: {:.4f}".format(epoch+1, model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)], test_loss / len(test_dataset)))
+                # logger.info("Epoch {}/{} Test Loss: {:.2e}".format(epoch+1, model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)], test_loss / len(test_dataset)))
             topk_loss = 1 - total_correct / (topk_times if topk_times > 0 else 1)
             top20_loss = 1 - tatal20_correct / (top20_times if top20_times > 0 else 1)
+            if top20_loss < best_score:
+                save_model(model, optimizer, lr_scheduler, epoch, syspath, ball_model_name, other="_{}_{}".format(start_dt, "best"))
+                best_score = top20_loss
         if args.tensorboard == 1:
             writer.add_scalar('Loss/Running', running_loss / (running_times if running_times > 0 else 1), epoch)
             if (epoch + 1) % save_epoch == 0:
                 writer.add_scalar('Loss/Test', test_loss / (test_times if test_times > 0 else 1), epoch)
                 writer.add_scalar('Loss/TopK{}'.format(args.top_k), topk_loss, epoch)
                 writer.add_scalar('Loss/TopK20', top20_loss, epoch)
-        pbar.set_description("ALoss:{:.4f} TLoss:{:.4f} KLoss-{}:{:.4f} KLoss-20:{:.4f}".format(running_loss / (running_times if running_times > 0 else 1), test_loss / (test_times if test_times > 0 else 1), args.top_k, topk_loss, top20_loss))
+        pbar.set_description("ALoss:{:.2e} TLoss:{:.2e} KLoss-{}:{:.2e} KLoss-20:{:.2e}".format(running_loss / (running_times if running_times > 0 else 1), test_loss / (test_times if test_times > 0 else 1), args.top_k, topk_loss, top20_loss))
         pbar.update(1)
     if args.tensorboard == 1:
         writer.close()
     pbar.close()
-    model_state_dict = model.state_dict()
-    optimizer_state_dict = optimizer.state_dict()
-    scheduler_state_dict = lr_scheduler.state_dict() 
-    save_dict = {
-        'model_state_dict': model_state_dict,
-        'optimizer_state_dict': optimizer_state_dict,
-        'scheduler_state_dict': scheduler_state_dict,
-        'epoch': epoch
-    }
-    torch.save(save_dict, "{}{}_pytorch_{}.{}".format(syspath, ball_model_name, args.model, extension))
+    save_model(model, optimizer, lr_scheduler, epoch, syspath, ball_model_name, other="_{}".format(start_dt))
+    # model_state_dict = model.state_dict()
+    # optimizer_state_dict = optimizer.state_dict()
+    # scheduler_state_dict = lr_scheduler.state_dict() 
+    # save_dict = {
+    #     'model_state_dict': model_state_dict,
+    #     'optimizer_state_dict': optimizer_state_dict,
+    #     'scheduler_state_dict': scheduler_state_dict,
+    #     'epoch': epoch
+    # }
+    # torch.save(save_dict, "{}{}_pytorch_{}.{}".format(syspath, ball_model_name, args.model, extension))
     logger.info("【{}】{}模型训练完成!".format(name_path[name]["name"], sub_name))
-    logger.info("ALoss:{:.4f} TLoss:{:.4f} {}-KLoss:{:.4f} 20-KLoss:{:.4f}".format(running_loss / (running_times if running_times > 0 else 1), test_loss / (test_times if test_times > 0 else 1), args.top_k, topk_loss, top20_loss))
+    logger.info("ALoss:{:.2e} TLoss:{:.2e} {}-KLoss:{:.2e} 20-KLoss:{:.2e}".format(running_loss / (running_times if running_times > 0 else 1), test_loss / (test_times if test_times > 0 else 1), args.top_k, topk_loss, top20_loss))
 
 def action(name):
     logger.info("正在创建【{}】数据集...".format(name_path[name]["name"]))
