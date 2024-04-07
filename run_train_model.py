@@ -217,8 +217,8 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
             topk_loss = 1 - total_correct / (topk_times if topk_times > 0 else 1)
             top20_loss = 1 - tatal20_correct / (top20_times if top20_times > 0 else 1)
             if top20_loss < best_score:
-                save_model(model, optimizer, lr_scheduler, epoch, syspath, ball_model_name, other="_{}_{}".format(start_dt, "best"))
                 best_score = top20_loss
+                save_model(model, optimizer, lr_scheduler, epoch, syspath, ball_model_name, other="_{}_{}".format(start_dt, "best"))
         if args.tensorboard == 1:
             writer.add_scalar('Loss/Running', running_loss / (running_times if running_times > 0 else 1), epoch)
             if (epoch + 1) % save_epoch == 0:
@@ -229,7 +229,6 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
         pbar.update(1)
     if args.tensorboard == 1:
         writer.close()
-    pbar.close()
     save_model(model, optimizer, lr_scheduler, epoch, syspath, ball_model_name, other="_{}".format(start_dt))
     # model_state_dict = model.state_dict()
     # optimizer_state_dict = optimizer.state_dict()
@@ -243,6 +242,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     # torch.save(save_dict, "{}{}_pytorch_{}.{}".format(syspath, ball_model_name, args.model, extension))
     logger.info("【{}】{}模型训练完成!".format(name_path[name]["name"], sub_name))
     pbar.set_description("AL:{:.2e} TL:{:.2e} KL{}:{:.2e} KL20:{:.2e} lr:{:.2e}".format(running_loss / (running_times if running_times > 0 else 1), test_loss / (test_times if test_times > 0 else 1), args.top_k, topk_loss, top20_loss, optimizer.param_groups[0]['lr']))
+    pbar.close()
 
 def action(name):
     logger.info("正在创建【{}】数据集...".format(name_path[name]["name"]))
