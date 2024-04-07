@@ -72,6 +72,7 @@ def save_model(model, optimizer, lr_scheduler, epoch, syspath, ball_model_name, 
         'hidden_size': args.hidden_size,
         'num_layers': args.num_layers,
         'num_heads': args.num_heads,
+        'best_score': best_score,
     }
     torch.save(save_dict, "{}{}_pytorch_{}{}.{}".format(syspath, ball_model_name, args.model, other, extension))
 
@@ -119,6 +120,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
         lr_scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
         current_epoch = checkpoint['epoch']
         start_dt = checkpoint['start_dt']
+        best_score = checkpoint['best_score']
         logger.info("已加载{}模型！ Epoch: {}".format(sub_name, current_epoch))
     pbar = tqdm(range(model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]), ncols=150)
     running_loss = 0.0
