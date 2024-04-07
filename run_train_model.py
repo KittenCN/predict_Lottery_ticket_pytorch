@@ -124,7 +124,8 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
             start_dt = checkpoint['start_dt']
         if 'best_score' in checkpoint:
             best_score = checkpoint['best_score']
-        logger.info("已加载{}模型！ Epoch: {}".format(sub_name, current_epoch))
+        logger.info("已加载{}模型！".format(sub_name))
+        logger.info("当前epoch是 {}, 初次启动时间是 {}, 最佳分数是 {}".format(current_epoch, start_dt, best_score))
     pbar = tqdm(range(model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]), ncols=150)
     running_loss = 0.0
     running_times = 0
@@ -222,7 +223,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
                 writer.add_scalar('Loss/Test', test_loss / (test_times if test_times > 0 else 1), epoch)
                 writer.add_scalar('Loss/TopK{}'.format(args.top_k), topk_loss, epoch)
                 writer.add_scalar('Loss/TopK20', top20_loss, epoch)
-        pbar.set_description("ALoss:{:.2e} TLoss:{:.2e} KLoss-{}:{:.2e} KLoss-20:{:.2e}".format(running_loss / (running_times if running_times > 0 else 1), test_loss / (test_times if test_times > 0 else 1), args.top_k, topk_loss, top20_loss))
+        pbar.set_description("AL:{:.2e} TL:{:.2e} KL{}:{:.2e} KL20:{:.2e} lr:{:.2e}".format(running_loss / (running_times if running_times > 0 else 1), test_loss / (test_times if test_times > 0 else 1), args.top_k, topk_loss, top20_loss, optimizer.param_groups[0]['lr']))
         pbar.update(1)
     if args.tensorboard == 1:
         writer.close()
@@ -239,7 +240,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     # }
     # torch.save(save_dict, "{}{}_pytorch_{}.{}".format(syspath, ball_model_name, args.model, extension))
     logger.info("【{}】{}模型训练完成!".format(name_path[name]["name"], sub_name))
-    logger.info("ALoss:{:.2e} TLoss:{:.2e} {}-KLoss:{:.2e} 20-KLoss:{:.2e}".format(running_loss / (running_times if running_times > 0 else 1), test_loss / (test_times if test_times > 0 else 1), args.top_k, topk_loss, top20_loss))
+    pbar.set_description("AL:{:.2e} TL:{:.2e} KL{}:{:.2e} KL20:{:.2e} lr:{:.2e}".format(running_loss / (running_times if running_times > 0 else 1), test_loss / (test_times if test_times > 0 else 1), args.top_k, topk_loss, top20_loss, optimizer.param_groups[0]['lr']))
 
 def action(name):
     logger.info("正在创建【{}】数据集...".format(name_path[name]["name"]))
