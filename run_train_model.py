@@ -118,9 +118,12 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
         model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         lr_scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
-        current_epoch = checkpoint['epoch']
-        start_dt = checkpoint['start_dt']
-        best_score = checkpoint['best_score']
+        if 'epoch' in checkpoint:
+            current_epoch = checkpoint['epoch']
+        if 'start_dt' in checkpoint:
+            start_dt = checkpoint['start_dt']
+        if 'best_score' in checkpoint:
+            best_score = checkpoint['best_score']
         logger.info("已加载{}模型！ Epoch: {}".format(sub_name, current_epoch))
     pbar = tqdm(range(model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]), ncols=150)
     running_loss = 0.0
