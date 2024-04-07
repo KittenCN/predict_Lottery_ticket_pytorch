@@ -120,6 +120,8 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
         lr_scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
         if 'epoch' in checkpoint:
             current_epoch = checkpoint['epoch']
+            if current_epoch >= model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)] - 1:
+                current_epoch = 0
         if 'start_dt' in checkpoint:
             start_dt = checkpoint['start_dt']
         if 'best_score' in checkpoint:
