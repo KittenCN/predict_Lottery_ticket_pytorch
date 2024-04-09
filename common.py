@@ -2,21 +2,21 @@
 """
 Author: KittenCN
 """
-from math import log
+import urllib3
+import sys
 import requests
 import pandas as pd
-from bs4 import BeautifulSoup
-from loguru import logger
 import torch
-from torch import nn
 import torch.nn.functional as F
-from config import *
 import datetime
 import numpy as np
 import modeling
 from torch.utils.data import DataLoader
-import urllib3
-import sys
+from math import log
+from bs4 import BeautifulSoup
+from loguru import logger
+from torch import nn
+from config import *
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 

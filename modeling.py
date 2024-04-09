@@ -10,7 +10,6 @@ import torch.utils.data as Data
 import numpy as np
 from torch.utils.data import  Dataset
 from torch.optim.lr_scheduler import _LRScheduler
-import torch.nn.functional as F
 
 import  os
 os.environ['CUDA_LAUNCH_BLOCKING'] = "1"

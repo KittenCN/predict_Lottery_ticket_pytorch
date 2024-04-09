@@ -10,7 +10,6 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import modeling
-import torch.optim as optim
 import sys
 from torch.utils.data import DataLoader
 from common import create_train_data, get_data_run
