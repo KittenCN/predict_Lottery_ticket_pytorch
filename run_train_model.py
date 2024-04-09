@@ -42,6 +42,7 @@ parser.add_argument('--model', default='Transformer', type=str, help="model name
 parser.add_argument('--lr', default=0.01, type=float, help="learning rate")
 parser.add_argument('--plus_mode', default=0, type=int, help="plus mode")
 parser.add_argument('--ext_times', default=1000, type=int, help="ext_times")
+parser.add_argument('--init', default=0, type=int, help="init")
 args = parser.parse_args()
 
 pred_key = {}
@@ -137,6 +138,8 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     lr_scheduler = modeling.CustomSchedule(optimizer=optimizer, d_model=args.hidden_size, warmup_steps=model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]*0.2)
     current_epoch = 0
     current_epoch = load_model(syspath, sub_name_eng, model, optimizer, lr_scheduler, sub_name)
+    if args.init == 1:
+        current_epoch = 0
     pbar = tqdm(range(model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]), ncols=150)
     running_loss = 0.0
     running_times = 0
