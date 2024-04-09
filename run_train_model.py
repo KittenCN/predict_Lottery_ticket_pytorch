@@ -59,7 +59,7 @@ if args.model == "Transformer":
 elif args.model == "LSTM":
     _model = modeling.LSTM_Model
 
-def save_model(model, optimizer, lr_scheduler, epoch, syspath, ball_model_name, other=""):
+def save_model(model, optimizer, lr_scheduler, epoch, syspath, ball_model_name, other="", no_update_times=0):
     model_state_dict = model.state_dict()
     optimizer_state_dict = optimizer.state_dict()
     scheduler_state_dict = lr_scheduler.state_dict() 
@@ -75,12 +75,14 @@ def save_model(model, optimizer, lr_scheduler, epoch, syspath, ball_model_name, 
         'num_layers': args.num_layers,
         'num_heads': args.num_heads,
         'best_score': best_score,
+        'no_update_times': no_update_times,
     }
     torch.save(save_dict, "{}{}_pytorch_{}{}.{}".format(syspath, ball_model_name, args.model, other, extension))
 
 def load_model(syspath, sub_name_eng, model, optimizer, lr_scheduler, sub_name="红球", other=""):
     global best_score, start_dt
     current_epoch = 0
+    no_update_times = 0
     address = "{}{}_ball_model_pytorch_{}{}.{}".format(syspath, sub_name_eng, args.model, other, extension)
     if os.path.exists(address):
         # model.load_state_dict(torch.load("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)))
@@ -102,8 +104,10 @@ def load_model(syspath, sub_name_eng, model, optimizer, lr_scheduler, sub_name="
             start_dt = checkpoint['start_dt']
         if 'best_score' in checkpoint:
             best_score = checkpoint['best_score']
+        if 'no_update_times' in checkpoint:
+            no_update_times = checkpoint['no_update_times']
         logger.info("已加载{}模型！".format(sub_name))
-    return current_epoch
+    return current_epoch, no_update_times
 
 def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     """ 模型训练
@@ -135,9 +139,11 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     # lr_scheduler=modeling.CustomSchedule(d_model=args.hidden_size, optimizer=optimizer)
     lr_scheduler = modeling.CustomSchedule(optimizer=optimizer, d_model=args.hidden_size, warmup_steps=model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]*0.2)
     current_epoch = 0
-    current_epoch = load_model(syspath, sub_name_eng, model, optimizer, lr_scheduler, sub_name)
+    no_update_times = 0
+    current_epoch, no_update_times = load_model(syspath, sub_name_eng, model, optimizer, lr_scheduler, sub_name)
     if args.init == 1:
         current_epoch = 0
+        no_update_times = 0
         optimizer = optim.Adam(model.parameters(), lr=args.lr)
         lr_scheduler = modeling.CustomSchedule(optimizer=optimizer, d_model=args.hidden_size, warmup_steps=model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]*0.2)   
     logger.info("当前epoch是 {}, 初次启动时间是 {}, 最佳分数是 {:.2e}".format(current_epoch, start_dt, best_score))
@@ -150,13 +156,12 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     topk_times = 0
     top20_loss = 0.0
     top20_times = 0
-    no_update_times = 0
     for epoch in range(current_epoch, model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]):
         no_update_times += 1
         if no_update_times > args.ext_times and args.plus_mode == 1:
             print()
             no_update_times = 0
-            _ = load_model(syspath, sub_name_eng, model, optimizer, lr_scheduler, sub_name, other="_{}_{}".format(start_dt, "best"))
+            _, _ = load_model(syspath, sub_name_eng, model, optimizer, lr_scheduler, sub_name, other="_{}_{}".format(start_dt, "best"))
         if epoch == current_epoch:
             pbar.update(current_epoch)
         running_loss = 0.0
@@ -179,7 +184,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
         if (epoch + 1) % save_epoch == 0:
             if time.time() - last_save_time > save_interval:
                 last_save_time = time.time()
-                save_model(model, optimizer, lr_scheduler, epoch, syspath, ball_model_name)
+                save_model(model, optimizer, lr_scheduler, epoch, syspath, ball_model_name, no_update_times=no_update_times)
             # run test
             model.eval()
             with torch.no_grad():
@@ -227,11 +232,11 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
             if top20_loss < best_score:
                 no_update_times = 0
                 best_score = top20_loss
-                save_model(model, optimizer, lr_scheduler, epoch, syspath, ball_model_name, other="_{}_{}".format(start_dt, "best"))
+                save_model(model, optimizer, lr_scheduler, epoch, syspath, ball_model_name, other="_{}_{}".format(start_dt, "best"), no_update_times=no_update_times)
             if topk_loss < best_score:
                 no_update_times = 0
                 best_score = topk_loss
-                save_model(model, optimizer, lr_scheduler, epoch, syspath, ball_model_name, other="_{}_{}".format(start_dt, "best"))
+                save_model(model, optimizer, lr_scheduler, epoch, syspath, ball_model_name, other="_{}_{}".format(start_dt, "best"), no_update_times=no_update_times)
         if args.tensorboard == 1:
             writer.add_scalar('Loss/Running', running_loss / (running_times if running_times > 0 else 1), epoch)
             if (epoch + 1) % save_epoch == 0:
@@ -242,7 +247,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
         pbar.update(1)
     if args.tensorboard == 1:
         writer.close()
-    save_model(model, optimizer, lr_scheduler, epoch, syspath, ball_model_name, other="_{}".format(start_dt))
+    save_model(model, optimizer, lr_scheduler, epoch, syspath, ball_model_name, other="_{}".format(start_dt), no_update_times=no_update_times)
     logger.info("【{}】{}模型训练完成!".format(name_path[name]["name"], sub_name))
     pbar.set_description("AL:{:.2e} TL:{:.2e} KL{}:{:.2e} KL20:{:.2e} lr:{:.2e} hs:{:.2e}".format(running_loss / (running_times if running_times > 0 else 1), test_loss / (test_times if test_times > 0 else 1), args.top_k, topk_loss, top20_loss, optimizer.param_groups[0]['lr'], best_score))
     pbar.close()
