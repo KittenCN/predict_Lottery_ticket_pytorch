@@ -150,6 +150,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     for epoch in range(current_epoch, model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]):
         no_update_times += 1
         if no_update_times > args.ext_times and args.plus_mode == 1:
+            no_update_times = 0
             _ = load_model(syspath, sub_name_eng, model, optimizer, lr_scheduler, sub_name, other="_{}_{}".format(start_dt, "best"))
         if epoch == current_epoch:
             pbar.update(current_epoch)
