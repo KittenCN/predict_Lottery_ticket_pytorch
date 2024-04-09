@@ -102,10 +102,7 @@ def load_model(syspath, sub_name_eng, model, optimizer, lr_scheduler, sub_name="
             start_dt = checkpoint['start_dt']
         if 'best_score' in checkpoint:
             best_score = checkpoint['best_score']
-        if args.init == 1:
-            current_epoch = 0
         logger.info("已加载{}模型！".format(sub_name))
-        logger.info("当前epoch是 {}, 初次启动时间是 {}, 最佳分数是 {:.2e}".format(current_epoch, start_dt, best_score))
     return current_epoch
 
 def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
@@ -139,6 +136,11 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     lr_scheduler = modeling.CustomSchedule(optimizer=optimizer, d_model=args.hidden_size, warmup_steps=model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]*0.2)
     current_epoch = 0
     current_epoch = load_model(syspath, sub_name_eng, model, optimizer, lr_scheduler, sub_name)
+    if args.init == 1:
+        current_epoch = 0
+        optimizer = optim.Adam(model.parameters(), lr=args.lr)
+        lr_scheduler = modeling.CustomSchedule(optimizer=optimizer, d_model=args.hidden_size, warmup_steps=model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]*0.2)   
+    logger.info("当前epoch是 {}, 初次启动时间是 {}, 最佳分数是 {:.2e}".format(current_epoch, start_dt, best_score))
     pbar = tqdm(range(model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]), ncols=150)
     running_loss = 0.0
     running_times = 0
