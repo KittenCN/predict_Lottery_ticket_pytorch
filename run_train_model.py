@@ -40,6 +40,8 @@ parser.add_argument('--num_workers', default=2, type=int, help="num_workers swit
 parser.add_argument('--top_k', default=10, type=int, help="top_k switch")
 parser.add_argument('--model', default='Transformer', type=str, help="model name")
 parser.add_argument('--lr', default=0.01, type=float, help="learning rate")
+parser.add_argument('--plus_mode', default=0, type=int, help="plus mode")
+parser.add_argument('--ext_times', default=1000, type=int, help="ext_times")
 args = parser.parse_args()
 
 pred_key = {}
@@ -76,12 +78,12 @@ def save_model(model, optimizer, lr_scheduler, epoch, syspath, ball_model_name, 
     }
     torch.save(save_dict, "{}{}_pytorch_{}{}.{}".format(syspath, ball_model_name, args.model, other, extension))
 
-def load_model(syspath, sub_name_eng, model, optimizer, lr_scheduler, sub_name="红球"):
+def load_model(syspath, sub_name_eng, model, optimizer, lr_scheduler, sub_name="红球", other="", current_epoch=0):
     global best_score, start_dt
-    current_epoch = 0
-    if os.path.exists("{}{}_ball_model_pytorch_{}.ckpt".format(syspath, sub_name_eng, args.model)):
+    address = "{}{}_ball_model_pytorch_{}{}.{}".format(syspath, sub_name_eng, args.model, other, extension)
+    if os.path.exists(address):
         # model.load_state_dict(torch.load("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)))
-        checkpoint = torch.load("{}{}_ball_model_pytorch_{}.ckpt".format(syspath, sub_name_eng, args.model))
+        checkpoint = torch.load(address)
         if 'windows_size' in checkpoint and 'batch_size' in checkpoint and 'hidden_size' in checkpoint and 'num_layers' in checkpoint and 'num_heads' in checkpoint:
             if checkpoint['windows_size'] != args.windows_size or checkpoint['batch_size'] != args.batch_size or checkpoint['hidden_size'] != args.hidden_size or checkpoint['num_layers'] != args.num_layers or checkpoint['num_heads'] != args.num_heads:
                 logger.info("模型参数不一致，重新训练！")
@@ -143,7 +145,11 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     topk_times = 0
     top20_loss = 0.0
     top20_times = 0
+    no_update_times = 0
     for epoch in range(current_epoch, model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]):
+        no_update_times += 1
+        if no_update_times > args.ext_times and args.plus_mode == 1:
+            current_epoch = load_model(syspath, sub_name_eng, model, optimizer, lr_scheduler, sub_name, other="_{}_{}".format(start_dt, "best"), current_epoch=current_epoch)
         if epoch == current_epoch:
             pbar.update(current_epoch)
         running_loss = 0.0
@@ -212,9 +218,11 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
             topk_loss = 1 - total_correct / (topk_times if topk_times > 0 else 1)
             top20_loss = 1 - tatal20_correct / (top20_times if top20_times > 0 else 1)
             if top20_loss < best_score:
+                no_update_times = 0
                 best_score = top20_loss
                 save_model(model, optimizer, lr_scheduler, epoch, syspath, ball_model_name, other="_{}_{}".format(start_dt, "best"))
             if topk_loss < best_score:
+                no_update_times = 0
                 best_score = topk_loss
                 save_model(model, optimizer, lr_scheduler, epoch, syspath, ball_model_name, other="_{}_{}".format(start_dt, "best"))
         if args.tensorboard == 1:
