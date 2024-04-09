@@ -78,8 +78,9 @@ def save_model(model, optimizer, lr_scheduler, epoch, syspath, ball_model_name, 
     }
     torch.save(save_dict, "{}{}_pytorch_{}{}.{}".format(syspath, ball_model_name, args.model, other, extension))
 
-def load_model(syspath, sub_name_eng, model, optimizer, lr_scheduler, sub_name="红球", other="", current_epoch=0):
+def load_model(syspath, sub_name_eng, model, optimizer, lr_scheduler, sub_name="红球", other=""):
     global best_score, start_dt
+    current_epoch = 0
     address = "{}{}_ball_model_pytorch_{}{}.{}".format(syspath, sub_name_eng, args.model, other, extension)
     if os.path.exists(address):
         # model.load_state_dict(torch.load("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)))
@@ -149,7 +150,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     for epoch in range(current_epoch, model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]):
         no_update_times += 1
         if no_update_times > args.ext_times and args.plus_mode == 1:
-            current_epoch = load_model(syspath, sub_name_eng, model, optimizer, lr_scheduler, sub_name, other="_{}_{}".format(start_dt, "best"), current_epoch=current_epoch)
+            _ = load_model(syspath, sub_name_eng, model, optimizer, lr_scheduler, sub_name, other="_{}_{}".format(start_dt, "best"))
         if epoch == current_epoch:
             pbar.update(current_epoch)
         running_loss = 0.0
