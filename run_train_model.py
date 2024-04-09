@@ -76,6 +76,33 @@ def save_model(model, optimizer, lr_scheduler, epoch, syspath, ball_model_name, 
     }
     torch.save(save_dict, "{}{}_pytorch_{}{}.{}".format(syspath, ball_model_name, args.model, other, extension))
 
+def load_model(syspath, sub_name_eng, model, optimizer, lr_scheduler, sub_name="红球"):
+    global best_score, start_dt
+    current_epoch = 0
+    if os.path.exists("{}{}_ball_model_pytorch_{}.ckpt".format(syspath, sub_name_eng, args.model)):
+        # model.load_state_dict(torch.load("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)))
+        checkpoint = torch.load("{}{}_ball_model_pytorch_{}.ckpt".format(syspath, sub_name_eng, args.model))
+        if 'windows_size' in checkpoint and 'batch_size' in checkpoint and 'hidden_size' in checkpoint and 'num_layers' in checkpoint and 'num_heads' in checkpoint:
+            if checkpoint['windows_size'] != args.windows_size or checkpoint['batch_size'] != args.batch_size or checkpoint['hidden_size'] != args.hidden_size or checkpoint['num_layers'] != args.num_layers or checkpoint['num_heads'] != args.num_heads:
+                logger.info("模型参数不一致，重新训练！")
+                sys.exit()
+        else:
+            logger.info("模型不是最新版本，建议重新训练！")
+        model.load_state_dict(checkpoint['model_state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        lr_scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+        if 'epoch' in checkpoint:
+            current_epoch = checkpoint['epoch']
+            if current_epoch >= model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)] - 1:
+                current_epoch = 0
+        if 'start_dt' in checkpoint:
+            start_dt = checkpoint['start_dt']
+        if 'best_score' in checkpoint:
+            best_score = checkpoint['best_score']
+        logger.info("已加载{}模型！".format(sub_name))
+        logger.info("当前epoch是 {}, 初次启动时间是 {}, 最佳分数是 {:.2e}".format(current_epoch, start_dt, best_score))
+    return current_epoch
+
 def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     """ 模型训练
     :param name: 玩法
@@ -106,28 +133,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     # lr_scheduler=modeling.CustomSchedule(d_model=args.hidden_size, optimizer=optimizer)
     lr_scheduler = modeling.CustomSchedule(optimizer=optimizer, d_model=args.hidden_size, warmup_steps=model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]*0.2)
     current_epoch = 0
-    if os.path.exists("{}{}_ball_model_pytorch_{}.ckpt".format(syspath, sub_name_eng, args.model)):
-        # model.load_state_dict(torch.load("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)))
-        checkpoint = torch.load("{}{}_ball_model_pytorch_{}.ckpt".format(syspath, sub_name_eng, args.model))
-        if 'windows_size' in checkpoint and 'batch_size' in checkpoint and 'hidden_size' in checkpoint and 'num_layers' in checkpoint and 'num_heads' in checkpoint:
-            if checkpoint['windows_size'] != args.windows_size or checkpoint['batch_size'] != args.batch_size or checkpoint['hidden_size'] != args.hidden_size or checkpoint['num_layers'] != args.num_layers or checkpoint['num_heads'] != args.num_heads:
-                logger.info("模型参数不一致，重新训练！")
-                sys.exit()
-        else:
-            logger.info("模型不是最新版本，建议重新训练！")
-        model.load_state_dict(checkpoint['model_state_dict'])
-        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        lr_scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
-        if 'epoch' in checkpoint:
-            current_epoch = checkpoint['epoch']
-            if current_epoch >= model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)] - 1:
-                current_epoch = 0
-        if 'start_dt' in checkpoint:
-            start_dt = checkpoint['start_dt']
-        if 'best_score' in checkpoint:
-            best_score = checkpoint['best_score']
-        logger.info("已加载{}模型！".format(sub_name))
-        logger.info("当前epoch是 {}, 初次启动时间是 {}, 最佳分数是 {}".format(current_epoch, start_dt, best_score))
+    current_epoch = load_model(syspath, sub_name_eng, model, optimizer, lr_scheduler, sub_name)
     pbar = tqdm(range(model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]), ncols=150)
     running_loss = 0.0
     running_times = 0
@@ -161,17 +167,6 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
             if time.time() - last_save_time > save_interval:
                 last_save_time = time.time()
                 save_model(model, optimizer, lr_scheduler, epoch, syspath, ball_model_name)
-                # model_state_dict = model.state_dict()
-                # optimizer_state_dict = optimizer.state_dict()
-                # scheduler_state_dict = lr_scheduler.state_dict() 
-                # save_dict = {
-                #     'model_state_dict': model_state_dict,
-                #     'optimizer_state_dict': optimizer_state_dict,
-                #     'scheduler_state_dict': scheduler_state_dict,
-                #     'epoch': epoch
-                # }
-                # torch.save(save_dict, "{}{}_pytorch_{}.{}".format(syspath, ball_model_name, args.model, extension))
-                # logger.info("【{}】{}模型已保存！".format(name_path[name]["name"], sub_name))
             # run test
             model.eval()
             with torch.no_grad():
@@ -219,6 +214,9 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
             if top20_loss < best_score:
                 best_score = top20_loss
                 save_model(model, optimizer, lr_scheduler, epoch, syspath, ball_model_name, other="_{}_{}".format(start_dt, "best"))
+            if topk_loss < best_score:
+                best_score = topk_loss
+                save_model(model, optimizer, lr_scheduler, epoch, syspath, ball_model_name, other="_{}_{}".format(start_dt, "best"))
         if args.tensorboard == 1:
             writer.add_scalar('Loss/Running', running_loss / (running_times if running_times > 0 else 1), epoch)
             if (epoch + 1) % save_epoch == 0:
@@ -230,16 +228,6 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     if args.tensorboard == 1:
         writer.close()
     save_model(model, optimizer, lr_scheduler, epoch, syspath, ball_model_name, other="_{}".format(start_dt))
-    # model_state_dict = model.state_dict()
-    # optimizer_state_dict = optimizer.state_dict()
-    # scheduler_state_dict = lr_scheduler.state_dict() 
-    # save_dict = {
-    #     'model_state_dict': model_state_dict,
-    #     'optimizer_state_dict': optimizer_state_dict,
-    #     'scheduler_state_dict': scheduler_state_dict,
-    #     'epoch': epoch
-    # }
-    # torch.save(save_dict, "{}{}_pytorch_{}.{}".format(syspath, ball_model_name, args.model, extension))
     logger.info("【{}】{}模型训练完成!".format(name_path[name]["name"], sub_name))
     pbar.set_description("AL:{:.2e} TL:{:.2e} KL{}:{:.2e} KL20:{:.2e} lr:{:.2e} hs:{:.2e}".format(running_loss / (running_times if running_times > 0 else 1), test_loss / (test_times if test_times > 0 else 1), args.top_k, topk_loss, top20_loss, optimizer.param_groups[0]['lr'], best_score))
     pbar.close()
