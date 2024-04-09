@@ -1,7 +1,6 @@
 # -*- coding:utf-8 -*-
 """
-Author: BigCat
-Modifier: KittenCN
+Author: KittenCN
 """
 import argparse
 from config import *
@@ -47,12 +46,4 @@ if __name__ == '__main__':
             current_number = get_current_number(args.name)
             # run_predict(int(size), model_args[args.name]["model_args"]['red_sequence_len'], hidden_size=args.hidden_size, num_layers=args.num_layers, num_heads=args.num_heads, input_size=model_args[args.name]["model_args"]["red_n_class"]*int(size), output_size=model_args[args.name]["model_args"]["red_n_class"], f_data=args.f_data, model=args.model)
             run_predict(int(size), model_args[args.name]["model_args"]['red_sequence_len'], hidden_size=args.hidden_size, num_layers=args.num_layers, num_heads=args.num_heads, input_size=model_args[args.name]["model_args"]["red_sequence_len"]*model_args[args.name]["model_args"]["red_n_class"], output_size=model_args[args.name]["model_args"]["red_sequence_len"]*model_args[args.name]["model_args"]["red_n_class"], f_data=args.f_data, model=args.model, args=args)
-            # _data, _title = predict_run(args.name)
-        # filename = datetime.datetime.now().strftime('%Y%m%d')
-        # filepath = "{}{}/".format(predict_path, args.name)
-        # fileadd = "{}{}{}".format(filepath, filename, ".csv")
-        # if not os.path.exists(filepath):
-        #     os.makedirs(filepath)
-        # df = pd.DataFrame(_data, columns=_title)
-        # df.to_csv(fileadd, encoding="utf-8",index=False)
         

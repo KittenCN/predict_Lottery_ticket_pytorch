@@ -12,7 +12,6 @@ import datetime
 import numpy as np
 import modeling
 from torch.utils.data import DataLoader
-from math import log
 from bs4 import BeautifulSoup
 from loguru import logger
 from torch import nn
