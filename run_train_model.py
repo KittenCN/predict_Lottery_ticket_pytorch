@@ -248,9 +248,10 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     if args.tensorboard == 1:
         writer.close()
     save_model(model, optimizer, lr_scheduler, epoch, syspath, ball_model_name, other="_{}".format(start_dt), no_update_times=no_update_times)
-    logger.info("【{}】{}模型训练完成!".format(name_path[name]["name"], sub_name))
     pbar.set_description("AL:{:.2e} TL:{:.2e} KL{}:{:.2e} KL20:{:.2e} lr:{:.2e} hs:{:.2e}".format(running_loss / (running_times if running_times > 0 else 1), test_loss / (test_times if test_times > 0 else 1), args.top_k, topk_loss, top20_loss, optimizer.param_groups[0]['lr'], best_score))
     pbar.close()
+    print()
+    logger.info("【{}】{}模型训练完成!".format(name_path[name]["name"], sub_name))
 
 def action(name):
     logger.info("正在创建【{}】数据集...".format(name_path[name]["name"]))
