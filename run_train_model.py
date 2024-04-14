@@ -151,9 +151,14 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
             newest_file = os.path.basename(max(_files, key=os.path.getmtime)).split('_')
             if len(newest_file) == 7:
                 _other = '_' + newest_file[-2] + '_' + newest_file[-1].split('.')[0]
+                logger.info("模型最优版本是：{}， 系统将尝试读取...".format(_other),)
             else:
                 logger.info("模型没有最优版本，将读取最后版本继续训练！")
+        elif args.train_mode == 0:
+            logger.info("系统将尝试读取最后版本继续训练！")
         current_epoch, no_update_times = load_model(syspath, sub_name_eng, model, optimizer, lr_scheduler, sub_name, other=_other)
+    else:
+        logger.info("系统将重新训练！")
     if args.init == 1:
         current_epoch = 0
         no_update_times = 0
