@@ -151,7 +151,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
             newest_file = os.path.basename(max(_files, key=os.path.getmtime)).split('_')
             if len(newest_file) == 7:
                 _other = '_' + newest_file[-2] + '_' + newest_file[-1].split('.')[0]
-                logger.info("模型最优版本是：{}， 系统将尝试读取...".format(_other),)
+                logger.info("模型最优版本是：{}， 系统将尝试读取...".format(os.path.basename(max(_files, key=os.path.getmtime))),)
             else:
                 logger.info("模型没有最优版本，将读取最后版本继续训练！")
         elif args.train_mode == 0:
