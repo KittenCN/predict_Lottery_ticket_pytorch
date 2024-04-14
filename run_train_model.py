@@ -11,6 +11,7 @@ import torch.nn as nn
 import torch.optim as optim
 import modeling
 import sys
+import glob
 from torch.utils.data import DataLoader
 from common import create_train_data, get_data_run
 from tqdm import tqdm
@@ -42,6 +43,7 @@ parser.add_argument('--lr', default=0.01, type=float, help="learning rate")
 parser.add_argument('--plus_mode', default=0, type=int, help="plus mode")
 parser.add_argument('--ext_times', default=1000, type=int, help="ext_times")
 parser.add_argument('--init', default=0, type=int, help="init")
+parser.add_argument('--train_mode', default=0, type=int, help="0: mormal, 1: new trainning, 2: best trainning")
 args = parser.parse_args()
 
 pred_key = {}
@@ -107,6 +109,8 @@ def load_model(syspath, sub_name_eng, model, optimizer, lr_scheduler, sub_name="
         if 'no_update_times' in checkpoint:
             no_update_times = checkpoint['no_update_times']
         logger.info("已加载{}模型！".format(sub_name))
+    else:
+        logger.info("没有找到{}模型，将重新训练！".format(sub_name))
     return current_epoch, no_update_times
 
 def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
@@ -140,7 +144,16 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     lr_scheduler = modeling.CustomSchedule(optimizer=optimizer, d_model=args.hidden_size, warmup_steps=model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]*0.2)
     current_epoch = 0
     no_update_times = 0
-    current_epoch, no_update_times = load_model(syspath, sub_name_eng, model, optimizer, lr_scheduler, sub_name)
+    _other = ""
+    if args.train_mode != 1:
+        if args.train_mode == 2:
+            _files = glob.glob(os.path.join(syspath, '*best*'))
+            newest_file = os.path.basename(max(_files, key=os.path.getmtime)).split('_')
+            if len(newest_file) == 7:
+                _other = '_' + newest_file[-2] + '_' + newest_file[-1].split('.')[0]
+            else:
+                logger.info("模型没有最优版本，将读取最后版本继续训练！")
+        current_epoch, no_update_times = load_model(syspath, sub_name_eng, model, optimizer, lr_scheduler, sub_name, other=_other)
     if args.init == 1:
         current_epoch = 0
         no_update_times = 0
