@@ -349,6 +349,7 @@ def predict_ball_model(name, dataset, sequence_len, sub_name="红球", window_si
             logger.info("模型不是最新版本，建议重新训练！")
         model.load_state_dict(checkpoint['model_state_dict'])
         logger.info("已加载{}模型！".format(sub_name))
+    model.eval()
     for batch in dataloader:
         x, y = batch
         x = x.to(modeling.device)
