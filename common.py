@@ -337,14 +337,19 @@ def predict_ball_model(name, dataset, sequence_len, sub_name="红球", window_si
         _model = modeling.Transformer_Model
     elif model_name == "LSTM":
         _model = modeling.LSTM_Model
-    model = _model(input_size=input_size, output_size=output_size, hidden_size=hidden_size, num_layers=num_layers, num_heads=num_heads, dropout=0.1).to(modeling.device)
+    model = _model(input_size=input_size, output_size=output_size, hidden_size=hidden_size, num_layers=num_layers, num_heads=num_heads, dropout=0.5).to(modeling.device)
     if os.path.exists("{}{}_ball_model_pytorch_{}.ckpt".format(syspath, sub_name_eng, model_name)):
         # model.load_state_dict(torch.load("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)))
         checkpoint = torch.load("{}{}_ball_model_pytorch_{}.ckpt".format(syspath, sub_name_eng, model_name))
         if 'windows_size' in checkpoint and 'batch_size' in checkpoint and 'hidden_size' in checkpoint and 'num_layers' in checkpoint and 'num_heads' in checkpoint:
             if checkpoint['windows_size'] != args.windows_size or checkpoint['batch_size'] != args.batch_size or checkpoint['hidden_size'] != args.hidden_size or checkpoint['num_layers'] != args.num_layers or checkpoint['num_heads'] != args.num_heads:
-                logger.info("模型参数不一致，重新训练！")
-                sys.exit()
+                logger.info("当前为预测模式，将自动调整训练参数！")
+                args.windows_size = checkpoint['windows_size']
+                args.batch_size = checkpoint['batch_size']
+                args.hidden_size = checkpoint['hidden_size']
+                args.num_layers = checkpoint['num_layers']
+                args.num_heads = checkpoint['num_heads']
+                model = _model(input_size=input_size, output_size=output_size, hidden_size=hidden_size, num_layers=num_layers, num_heads=num_heads, dropout=0.5).to(modeling.device)
         else:
             logger.info("模型不是最新版本，建议重新训练！")
         model.load_state_dict(checkpoint['model_state_dict'])

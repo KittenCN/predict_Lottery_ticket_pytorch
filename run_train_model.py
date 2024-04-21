@@ -81,7 +81,7 @@ def save_model(model, optimizer, lr_scheduler, epoch, syspath, ball_model_name, 
     }
     torch.save(save_dict, "{}{}_pytorch_{}{}.{}".format(syspath, ball_model_name, args.model, other, extension))
 
-def load_model(syspath, sub_name_eng, model, optimizer, lr_scheduler, sub_name="红球", other=""):
+def load_model(m_args, syspath, sub_name_eng, model, optimizer, lr_scheduler, sub_name="红球", other=""):
     global best_score, start_dt
     current_epoch = 0
     no_update_times = 0
@@ -100,6 +100,10 @@ def load_model(syspath, sub_name_eng, model, optimizer, lr_scheduler, sub_name="
                     args.hidden_size = checkpoint['hidden_size']
                     args.num_layers = checkpoint['num_layers']
                     args.num_heads = checkpoint['num_heads']
+                    if args.model == "Transformer":
+                        model = _model(input_size=m_args["model_args"]["red_n_class"]*m_args["model_args"]["windows_size"], output_size=m_args["model_args"]["red_n_class"], hidden_size=args.hidden_size, num_layers=args.num_layers, num_heads=args.num_heads, dropout=0.5).to(modeling.device)
+                    elif args.model == "LSTM":
+                        model = _model(input_size=m_args["model_args"]["red_sequence_len"]*m_args["model_args"]["red_n_class"], output_size=m_args["model_args"]["red_sequence_len"]*m_args["model_args"]["red_n_class"], hidden_size=args.hidden_size, num_layers=args.num_layers, num_heads=args.num_heads, dropout=0.5).to(modeling.device)
                 else:
                     logger.info("请修改参数或重新训练！")
                     sys.exit()
@@ -166,7 +170,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
                 logger.info("模型没有最优版本，将读取最后版本继续训练！")
         elif args.train_mode == 0:
             logger.info("系统将尝试读取最后版本继续训练！")
-        current_epoch, no_update_times = load_model(syspath, sub_name_eng, model, optimizer, lr_scheduler, sub_name, other=_other)
+        current_epoch, no_update_times = load_model(m_args, syspath, sub_name_eng, model, optimizer, lr_scheduler, sub_name, other=_other)
     else:
         logger.info("系统将重新训练！")
     if args.init == 1:
@@ -189,7 +193,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
         if no_update_times > args.ext_times and args.plus_mode == 1:
             print()
             no_update_times = 0
-            _, _ = load_model(syspath, sub_name_eng, model, optimizer, lr_scheduler, sub_name, other="_{}_{}".format(start_dt, "best"))
+            _, _ = load_model(m_args, syspath, sub_name_eng, model, optimizer, lr_scheduler, sub_name, other="_{}_{}".format(start_dt, "best"))
         if epoch == current_epoch:
             pbar.update(current_epoch)
         running_loss = 0.0
