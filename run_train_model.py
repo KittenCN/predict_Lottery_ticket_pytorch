@@ -92,6 +92,7 @@ def load_model(syspath, sub_name_eng, model, optimizer, lr_scheduler, sub_name="
         if 'windows_size' in checkpoint and 'batch_size' in checkpoint and 'hidden_size' in checkpoint and 'num_layers' in checkpoint and 'num_heads' in checkpoint:
             if checkpoint['windows_size'] != args.windows_size or checkpoint['batch_size'] != args.batch_size or checkpoint['hidden_size'] != args.hidden_size or checkpoint['num_layers'] != args.num_layers or checkpoint['num_heads'] != args.num_heads:
                 logger.info("模型参数不一致，重新训练！")
+                logger.info("保存的参数为: windows_size: {}, batch_size: {}, hidden_size: {}, num_layers: {}, num_heads: {}".format(checkpoint['windows_size'], checkpoint['batch_size'], checkpoint['hidden_size'], checkpoint['num_layers'], checkpoint['num_heads']))
                 sys.exit()
         else:
             logger.info("模型不是最新版本，建议重新训练！")
