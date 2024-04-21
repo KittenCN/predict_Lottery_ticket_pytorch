@@ -104,6 +104,8 @@ def load_model(m_args, syspath, sub_name_eng, model, optimizer, lr_scheduler, su
                         model = _model(input_size=m_args["model_args"]["red_n_class"]*m_args["model_args"]["windows_size"], output_size=m_args["model_args"]["red_n_class"], hidden_size=args.hidden_size, num_layers=args.num_layers, num_heads=args.num_heads, dropout=0.5).to(modeling.device)
                     elif args.model == "LSTM":
                         model = _model(input_size=m_args["model_args"]["red_sequence_len"]*m_args["model_args"]["red_n_class"], output_size=m_args["model_args"]["red_sequence_len"]*m_args["model_args"]["red_n_class"], hidden_size=args.hidden_size, num_layers=args.num_layers, num_heads=args.num_heads, dropout=0.5).to(modeling.device)
+                    optimizer = optim.Adam(model.parameters(), lr=args.lr)
+                    lr_scheduler = modeling.CustomSchedule(optimizer=optimizer, d_model=args.hidden_size, warmup_steps=model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]*0.2)
                 else:
                     logger.info("请修改参数或重新训练！")
                     sys.exit()
