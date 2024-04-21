@@ -93,7 +93,7 @@ def load_model(syspath, sub_name_eng, model, optimizer, lr_scheduler, sub_name="
             if checkpoint['windows_size'] != args.windows_size or checkpoint['batch_size'] != args.batch_size or checkpoint['hidden_size'] != args.hidden_size or checkpoint['num_layers'] != args.num_layers or checkpoint['num_heads'] != args.num_heads:
                 logger.info("模型参数不一致！")
                 logger.info("保存的参数为: windows_size: {}, batch_size: {}, hidden_size: {}, num_layers: {}, num_heads: {}".format(checkpoint['windows_size'], checkpoint['batch_size'], checkpoint['hidden_size'], checkpoint['num_layers'], checkpoint['num_heads']))
-                if args.train_mode not in [0, 2]:
+                if args.train_mode in [0, 2]:
                     logger.info("当前为继续训练模式，将自动调整训练参数！")
                     args.windows_size = checkpoint['windows_size']
                     args.batch_size = checkpoint['batch_size']
