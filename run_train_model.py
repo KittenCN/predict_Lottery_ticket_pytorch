@@ -155,6 +155,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     :return:
     """
     global last_save_time, best_score, start_dt, test_list, red_train_data, red_test_data, blue_train_data, blue_test_data
+    _test_list = []
     sub_name_eng = "red" if sub_name == "红球" else "blue"
     ball_model_name = red_ball_model_name if sub_name == "红球" else blue_ball_model_name
     m_args = model_args[name]
