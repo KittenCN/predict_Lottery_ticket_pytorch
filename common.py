@@ -382,26 +382,17 @@ def run_predict(window_size, sequence_len, hidden_size=128, num_layers=8, num_he
             data = create_train_data(mini_args.name, model_args[mini_args.name]["model_args"]["windows_size"], 1, sub_name_eng, mini_args.cq,f_data=f_data, model=model)
             y_pred, name_list = predict_ball_model(mini_args.name, data, sequence_len, sub_name, window_size,hidden_size=hidden_size, num_layers=num_layers, num_heads=num_heads, input_size=input_size, output_size=output_size, model_name=model, args=args)
             logger.info("预测{}结果为: \n".format(sub_name))
-            if mini_args.name in ["kl8"]:
-                if model == "Transformer":
-                    y_pred_list = modeling.binary_decode_array(y_pred.cpu(), threshold=0.25, top_k=80)
-                    for row in y_pred_list:
-                        row_limit = row[0:20]
-                        logger.info("超过阈值的数据: {}".format(row))
-                        logger.info("前20位超过阈值的数据: {}".format(row_limit))
-                        logger.info("排序后前20位超过阈值的数据: {}".format(sorted(row_limit)))
-                elif model == "LSTM":
-                    y_pred_list = modeling.decode_one_hot(y_pred.cpu(), sort_by_max_value=True, num_classes=mini_args[mini_args.name]["model_args"]["red_n_class"])
-                    logger.info("前20位超过阈值的数据: {}".format(y_pred_list))
-                    logger.info("排序后前20位超过阈值的数据: {}".format(sorted(y_pred_list)))
-                
-            else:
-                y_pred_list = y_pred.cpu().tolist()
+            if model == "Transformer":
+                y_pred_list = modeling.binary_decode_array(y_pred.cpu(), threshold=0.25, top_k=mini_args[mini_args.name]["model_args"]["red_n_class"])
                 for row in y_pred_list:
-                    strrow = ""
-                    for col in row:
-                        strrow += str("{:.4f}".format(col))
-                    logger.info(strrow)
+                    row_limit = row[0:20]
+                    logger.info("超过阈值的数据: {}".format(row))
+                    logger.info("前K位超过阈值的数据: {}".format(row_limit))
+                    logger.info("排序后前K位超过阈值的数据: {}".format(sorted(row_limit)))
+            elif model == "LSTM":
+                y_pred_list = modeling.decode_one_hot(y_pred.cpu(), sort_by_max_value=True, num_classes=mini_args[mini_args.name]["model_args"]["red_n_class"])
+                logger.info("超过阈值的数据: {}".format(y_pred_list))
+                logger.info("排序后超过阈值的数据: {}".format(sorted(y_pred_list)))
         else:
             logger.warning("抱歉，没有找到{}模型！".format(sub_name))
             exit(0)
