@@ -4,8 +4,13 @@ requests
 keras
 beautifulsoup4
 pandas
-numpy
 lxml
 loguru
 grpcio
 protobuf
+
+# for intel cpu
+intel_numpy
+mkl
+# for other cpu
+# numpy
