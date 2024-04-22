@@ -97,7 +97,7 @@ def one_hot_encode_array(input_array, num_classes=80):
     
     return one_hot_encoded_array
 
-def decode_one_hot(one_hot_encoded_data, sort_by_max_value=False):
+def decode_one_hot(one_hot_encoded_data, sort_by_max_value=False, num_classes=80):
     """
     Decode one-hot encoded data back to its original numerical representation.
     
@@ -113,10 +113,10 @@ def decode_one_hot(one_hot_encoded_data, sort_by_max_value=False):
         one_hot_encoded_data = torch.tensor(one_hot_encoded_data)
     
     # Check if the data length is a multiple of 80
-    assert one_hot_encoded_data.numel() % 80 == 0, "The total number of data points must be a multiple of 80."
+    assert one_hot_encoded_data.numel() % num_classes == 0, "The total number of data points must be a multiple of 80."
     
     # Reshape the data to have shape (-1, 80), where each row is one 80-length segment
-    reshaped_data = one_hot_encoded_data.view(-1, 80)
+    reshaped_data = one_hot_encoded_data.view(-1, num_classes)
     
     # Decode each segment
     decoded_numbers = []
@@ -233,16 +233,18 @@ class CustomSchedule(_LRScheduler):
 
 # 定义数据集类
 class MyDataset(Dataset):
-    def __init__(self, data, windows, cut_num, model='Transformer'):
+    def __init__(self, data, windows, cut_num, model='Transformer', num_classes=80):
         tmp = []
         for i in range(len(data) - windows):
             if cut_num > 0:
                 sub_data = data[i:(i+windows+1), :cut_num]
+                tmp.append(sub_data.reshape(windows+1, cut_num))
             else:
-                sub_data = data[i:(i+windows+1), cut_num:]
-            tmp.append(sub_data.reshape(windows+1, cut_num))
+                sub_data = data[i:(i+windows+1), cut_num*(-1):]
+                tmp.append(sub_data.reshape(windows+1, data.shape[1]-(cut_num*(-1))))
         self.data = np.array(tmp)
         self.model = model
+        self.num_classes = num_classes
     
     def __len__(self):
         return len(self.data) - 1
@@ -252,11 +254,11 @@ class MyDataset(Dataset):
         x = torch.from_numpy(self.data[idx][1:][::-1].copy())
         y = torch.from_numpy(self.data[idx][0].copy()).unsqueeze(0)
         if self.model == 'Transformer':
-            x_hot = binary_encode_array(x) 
-            y_hot = binary_encode_array(y)
+            x_hot = binary_encode_array(x, self.num_classes) 
+            y_hot = binary_encode_array(y, self.num_classes)
         elif self.model == 'LSTM':
-            x_hot = one_hot_encode_array(x)
-            y_hot = one_hot_encode_array(y)
+            x_hot = one_hot_encode_array(x, self.num_classes)
+            y_hot = one_hot_encode_array(y, self.num_classes)
         return x_hot, y_hot
 
 # 定义 Transformer 模型类 (废除不用)

@@ -42,7 +42,7 @@ class FocalLoss(nn.Module):
         F_loss = at * (1 - pt) ** self.gamma * BCE_loss
         return F_loss.mean()
 
-def create_train_data(name, windows, dataset=0, ball_type="red", cq=0, test_flag=0, test_begin=2021351, f_data=0, model="Transformer"):
+def create_train_data(name, windows, dataset=0, ball_type="red", cq=0, test_flag=0, test_begin=2021351, f_data=0, model="Transformer", num_classes=80):
     """ 创建训练数据
     :param name: 玩法，双色球/大乐透
     :param windows: 训练窗口
@@ -99,9 +99,9 @@ def create_train_data(name, windows, dataset=0, ball_type="red", cq=0, test_flag
         }
     else:
         if ball_type == "red":
-            dataset = modeling.MyDataset(data, windows, cut_num, model)
+            dataset = modeling.MyDataset(data, windows, cut_num, model, num_classes)
         else:
-            dataset = modeling.MyDataset(data, windows, cut_num * -1, model)
+            dataset = modeling.MyDataset(data, windows, cut_num * -1, model, num_classes)
         logger.info(strball + strflag + "集数据维度: {}".format(dataset.data.shape))
         return dataset
 
@@ -391,7 +391,7 @@ def run_predict(window_size, sequence_len, hidden_size=128, num_layers=8, num_he
                         logger.info("前20位超过阈值的数据: {}".format(row_limit))
                         logger.info("排序后前20位超过阈值的数据: {}".format(sorted(row_limit)))
                 elif model == "LSTM":
-                    y_pred_list = modeling.decode_one_hot(y_pred.cpu(), sort_by_max_value=True)
+                    y_pred_list = modeling.decode_one_hot(y_pred.cpu(), sort_by_max_value=True, num_classes=mini_args[mini_args.name]["model_args"]["red_n_class"])
                     logger.info("前20位超过阈值的数据: {}".format(y_pred_list))
                     logger.info("排序后前20位超过阈值的数据: {}".format(sorted(y_pred_list)))
                 
