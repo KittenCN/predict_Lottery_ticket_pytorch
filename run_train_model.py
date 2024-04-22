@@ -278,23 +278,23 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
                     test_loss += tt_loss.item()
                     # calculate topk loss
                     if args.name not in ["kl8"]:
-                        args.top_k = m_args["model_args"]["{}_n_class".format(sub_name_eng)]
+                        args.top_k = m_args["model_args"]["{}_sequence_len".format(sub_name_eng)]
                     if args.model == "Transformer":
                         probs, indices = torch.topk(y_pred, args.top_k, dim=1)
                         for i in range(x.size(0)):
                             topk_times += args.top_k
                             target_indices = y[i].nonzero(as_tuple=False).squeeze()
                             total_correct += sum([1 for j in indices[i] if j in target_indices])
-                        probs, indices = torch.topk(y_pred, m_args["model_args"]["{}_n_class".format(sub_name_eng)], dim=1)
+                        probs, indices = torch.topk(y_pred, m_args["model_args"]["{}_sequence_len".format(sub_name_eng)], dim=1)
                         for i in range(x.size(0)):
-                            top_times += m_args["model_args"]["{}_n_class".format(sub_name_eng)]
+                            top_times += m_args["model_args"]["{}_sequence_len".format(sub_name_eng)]
                             target_indices = y[i].nonzero(as_tuple=False).squeeze()
                             tatal_correct += sum([1 for j in indices[i] if j in target_indices])
                     elif args.model == "LSTM":
                         for i in range(x.size(0)):
                             _ele = modeling.decode_one_hot(y_pred[i], sort_by_max_value=True, num_classes=m_args["model_args"]["{}_n_class".format(sub_name_eng)])
                             topk_times += args.top_k
-                            top_times += m_args["model_args"]["{}_n_class".format(sub_name_eng)]
+                            top_times += m_args["model_args"]["{}_sequence_len".format(sub_name_eng)]
                             # target_indices = y[i].nonzero(as_tuple=False).squeeze()
                             target_indices = modeling.decode_one_hot(y[i], num_classes=m_args["model_args"]["{}_n_class".format(sub_name_eng)])
                             total_correct += sum([1 for j in _ele[0:args.top_k] if j in target_indices])
