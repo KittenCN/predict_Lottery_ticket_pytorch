@@ -42,7 +42,7 @@ class FocalLoss(nn.Module):
         F_loss = at * (1 - pt) ** self.gamma * BCE_loss
         return F_loss.mean()
 
-def create_train_data(name, windows, dataset=0, ball_type="red", cq=0, test_flag=0, test_begin=2021351, f_data=0, model="Transformer", num_classes=80):
+def create_train_data(name, windows, dataset=0, ball_type="red", cq=0, test_flag=0, test_begin=2021351, f_data=0, model="Transformer", num_classes=80, test_list=[]):
     """ 创建训练数据
     :param name: 玩法，双色球/大乐透
     :param windows: 训练窗口
@@ -57,14 +57,21 @@ def create_train_data(name, windows, dataset=0, ball_type="red", cq=0, test_flag
         else:
             ori_data = pd.read_csv("{}{}".format(name_path[name]["path"], data_file_name))
     data = ori_data.copy()
-    if f_data == 0:
-        if test_flag == 0:
-            data = data[data['期数'] > test_begin]
+    if test_begin >= 0:
+        if f_data == 0:
+            if test_flag == 0:
+                data = data[data['期数'] > test_begin]
+            else:
+                data = data[data['期数'] <= test_begin]
         else:
-            data = data[data['期数'] <= test_begin]
-    else:
-        data = data[data['期数'] <= f_data]
-        data = data.head(windows + 1)
+            data = data[data['期数'] <= f_data]
+            data = data.head(windows + 1)
+    elif len(test_list) > 0:
+        if test_flag == 0:
+            data = data[~data['期数'].isin(test_list)]
+        else:
+            data = data[data['期数'].isin(test_list)]
+
     if not len(data):
         raise logger.error(" 请执行 get_data.py 进行数据下载！")
     else:

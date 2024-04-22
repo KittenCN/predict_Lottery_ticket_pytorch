@@ -18,6 +18,7 @@ from tqdm import tqdm
 from config import *
 from loguru import logger
 from datetime import datetime as dt
+import pandas as pd
 from torch.utils.tensorboard import SummaryWriter   # to print to tensorboard
 
 warnings.filterwarnings('ignore')
@@ -53,6 +54,11 @@ save_interval = 60
 last_save_time = time.time()
 best_score = 999999999
 start_dt = dt.now().strftime("%Y%m%d%H%M%S")
+test_list = []
+red_train_data = None
+red_test_data = None
+blue_train_data = None
+blue_test_data = None
 
 if args.tensorboard == 1:
     writer = SummaryWriter('../tf-logs')
@@ -80,17 +86,19 @@ def save_model(model, optimizer, lr_scheduler, epoch, syspath, ball_model_name, 
         'best_score': best_score,
         'no_update_times': no_update_times,
         'split_time': args.split_time,
+        'test_list': test_list,
     }
     torch.save(save_dict, "{}{}_pytorch_{}{}.{}".format(syspath, ball_model_name, args.model, other, extension))
 
 def load_model(m_args, syspath, sub_name_eng, model, optimizer, lr_scheduler, sub_name="红球", other=""):
     global best_score, start_dt
+    _test_list = []
     current_epoch = 0
     no_update_times = 0
+    split_time = args.split_time
     address = "{}{}_ball_model_pytorch_{}{}.{}".format(syspath, sub_name_eng, args.model, other, extension)
     if os.path.exists(address):
         # model.load_state_dict(torch.load("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)))
-        split_time = args.split_time
         checkpoint = torch.load(address)
         if 'windows_size' in checkpoint and 'batch_size' in checkpoint and 'hidden_size' in checkpoint and 'num_layers' in checkpoint and 'num_heads' in checkpoint:
             if checkpoint['windows_size'] != args.windows_size or checkpoint['batch_size'] != args.batch_size or checkpoint['hidden_size'] != args.hidden_size or checkpoint['num_layers'] != args.num_layers or checkpoint['num_heads'] != args.num_heads:
@@ -129,10 +137,15 @@ def load_model(m_args, syspath, sub_name_eng, model, optimizer, lr_scheduler, su
             no_update_times = checkpoint['no_update_times']
         if 'split_time' in checkpoint:
             split_time = checkpoint['split_time']
+        if 'test_list' in checkpoint:
+            _test_list = checkpoint['test_list']
+        if split_time < 0 and len(_test_list) <= 0:
+            logger.warning("测试数据集丢失，请重新训练！")
+            sys.exit()
         logger.info("已加载{}模型！".format(sub_name))
     else:
         logger.info("没有找到{}模型，将重新训练！".format(sub_name))
-    return current_epoch, no_update_times, split_time
+    return current_epoch, no_update_times, split_time, _test_list
 
 def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     """ 模型训练
@@ -141,7 +154,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     :param y_data: 训练标签
     :return:
     """
-    global last_save_time, best_score, start_dt
+    global last_save_time, best_score, start_dt, test_list, red_train_data, red_test_data, blue_train_data, blue_test_data
     sub_name_eng = "red" if sub_name == "红球" else "blue"
     ball_model_name = red_ball_model_name if sub_name == "红球" else blue_ball_model_name
     m_args = model_args[name]
@@ -167,25 +180,35 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     if args.train_mode != 1:
         if args.train_mode == 2:
             _files = glob.glob(os.path.join(syspath, '*best*'))
-            newest_file = os.path.basename(max(_files, key=os.path.getmtime)).split('_')
-            if len(newest_file) == 7:
-                _other = '_' + newest_file[-2] + '_' + newest_file[-1].split('.')[0]
-                logger.info("模型最优版本是：{}， 系统将尝试读取...".format(os.path.basename(max(_files, key=os.path.getmtime))),)
-            else:
+            if len(_files) <= 0:
                 logger.info("模型没有最优版本，将读取最后版本继续训练！")
+            else:
+                newest_file = os.path.basename(max(_files, key=os.path.getmtime)).split('_')
+                if len(newest_file) == 7:
+                    _other = '_' + newest_file[-2] + '_' + newest_file[-1].split('.')[0]
+                    logger.info("模型最优版本是：{}， 系统将尝试读取...".format(os.path.basename(max(_files, key=os.path.getmtime))),)
+                else:
+                    logger.info("模型没有最优版本，将读取最后版本继续训练！")
         elif args.train_mode == 0:
             logger.info("系统将尝试读取最后版本继续训练！")
-        current_epoch, no_update_times, split_time = load_model(m_args, syspath, sub_name_eng, model, optimizer, lr_scheduler, sub_name, other=_other)
+        current_epoch, no_update_times, split_time, _test_list = load_model(m_args, syspath, sub_name_eng, model, optimizer, lr_scheduler, sub_name, other=_other)
     else:
         logger.info("系统将重新训练！")
-    if split_time != args.split_time:
+    if split_time != args.split_time or (split_time < 0 and set(_test_list) != set(test_list) and len(_test_list) > 0):
+        logger.info("读取已保存的测试数据集，将重新载入数据！")
         args.split_time = split_time
+        test_list = _test_list
+        red_train_data = create_train_data(name=args.name, windows=model_args[name]["model_args"]["windows_size"], dataset=1, ball_type="red", cq=args.cq, test_flag=0, test_begin=args.split_time, f_data=0, model=args.model, num_classes=model_args[name]["model_args"]["red_n_class"], test_list=test_list)
+        red_test_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "red", args.cq, 1, args.split_time, model=args.model, num_classes=model_args[name]["model_args"]["red_n_class"], test_list=test_list)
+        if name not in ["kl8"]:
+            blue_train_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "blue", args.cq, 0, args.split_time, model=args.model, num_classes=model_args[name]["model_args"]["blue_n_class"], test_list=test_list)
+            blue_test_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "blue", args.cq, 1, args.split_time, model=args.model, num_classes=model_args[name]["model_args"]["blue_n_class"], test_list=test_list)
         if sub_name_eng == "red":
-            dataset = create_train_data(name=args.name, windows=model_args[name]["model_args"]["windows_size"], dataset=1, ball_type="red", cq=args.cq, test_flag=0, test_begin=args.split_time, f_data=0, model=args.model, num_classes=model_args[name]["model_args"]["red_n_class"])
-            test_dataset = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "red", args.cq, 1, args.split_time, model=args.model, num_classes=model_args[name]["model_args"]["red_n_class"])
+            dataset = red_train_data
+            test_dataset = red_test_data
         elif sub_name_eng == "blue":
-            dataset = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "blue", args.cq, 0, args.split_time, model=args.model, num_classes=model_args[name]["model_args"]["blue_n_class"])
-            test_dataset = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "blue", args.cq, 1, args.split_time, model=args.model, num_classes=model_args[name]["model_args"]["blue_n_class"])
+            dataset = blue_train_data
+            test_dataset = blue_test_data
     dataloader = DataLoader(dataset, batch_size=model_args[args.name]["model_args"]["batch_size"], shuffle=True, num_workers=args.num_workers, pin_memory=True)
     test_dataloader = DataLoader(test_dataset, batch_size=model_args[args.name]["model_args"]["batch_size"], shuffle=True, num_workers=args.num_workers, pin_memory=True)
     if args.init == 1:
@@ -208,7 +231,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
         if no_update_times > args.ext_times and args.plus_mode == 1:
             print()
             no_update_times = 0
-            _, _, _ = load_model(m_args, syspath, sub_name_eng, model, optimizer, lr_scheduler, sub_name, other="_{}_{}".format(start_dt, "best"))
+            _, _, _, _ = load_model(m_args, syspath, sub_name_eng, model, optimizer, lr_scheduler, sub_name, other="_{}_{}".format(start_dt, "best"))
         if epoch == current_epoch:
             pbar.update(current_epoch)
         running_loss = 0.0
@@ -303,14 +326,24 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     logger.info("【{}】{}模型训练完成!".format(name_path[name]["name"], sub_name))
 
 def action(name):
-    global best_score
+    global best_score, test_list, red_train_data, red_test_data, blue_train_data, blue_test_data
     logger.info("正在创建【{}】数据集...".format(name_path[name]["name"]))
+    if args.split_time < 0 and len(test_list) <= 0:
+        logger.info("抽取测试数据...")
+        ori_data = None
+        if args.cq == 1 and name == "kl8":
+            ori_data = pd.read_csv("{}{}".format(name_path[name]["path"], data_cq_file_name))
+        else:
+            ori_data = pd.read_csv("{}{}".format(name_path[name]["path"], data_file_name))
+        n = -1 * args.split_time
+        n_samples = int(len(ori_data['期数'].unique()) * n / 100)
+        test_list = ori_data['期数'].drop_duplicates().sample(n_samples).tolist()
     # name, windows, dataset=0, ball_type="red", cq=0, test_flag=0, test_begin=2021351, f_data=0, model="Transformer"
-    red_train_data = create_train_data(name=args.name, windows=model_args[name]["model_args"]["windows_size"], dataset=1, ball_type="red", cq=args.cq, test_flag=0, test_begin=args.split_time, f_data=0, model=args.model, num_classes=model_args[name]["model_args"]["red_n_class"])
-    red_test_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "red", args.cq, 1, args.split_time, model=args.model, num_classes=model_args[name]["model_args"]["red_n_class"])
+    red_train_data = create_train_data(name=args.name, windows=model_args[name]["model_args"]["windows_size"], dataset=1, ball_type="red", cq=args.cq, test_flag=0, test_begin=args.split_time, f_data=0, model=args.model, num_classes=model_args[name]["model_args"]["red_n_class"], test_list=test_list)
+    red_test_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "red", args.cq, 1, args.split_time, model=args.model, num_classes=model_args[name]["model_args"]["red_n_class"], test_list=test_list)
     if name not in ["kl8"]:
-        blue_train_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "blue", args.cq, 0, args.split_time, model=args.model, num_classes=model_args[name]["model_args"]["blue_n_class"])
-        blue_test_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "blue", args.cq, 1, args.split_time, model=args.model, num_classes=model_args[name]["model_args"]["blue_n_class"])
+        blue_train_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "blue", args.cq, 0, args.split_time, model=args.model, num_classes=model_args[name]["model_args"]["blue_n_class"], test_list=test_list)
+        blue_test_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "blue", args.cq, 1, args.split_time, model=args.model, num_classes=model_args[name]["model_args"]["blue_n_class"], test_list=test_list)
     for i in range(args.epochs):
         if model_args[name]["model_args"]["red_epochs"] > 0:
             best_score = 999999999
