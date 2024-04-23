@@ -8,7 +8,7 @@ lxml
 loguru
 grpcio
 protobuf
-
+prefetch_generator
 # for intel cpu
 intel_numpy
 mkl
