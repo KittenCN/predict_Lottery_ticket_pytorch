@@ -12,13 +12,14 @@ import torch.optim as optim
 import modeling
 import sys
 import glob
+import pandas as pd
 from torch.utils.data import DataLoader
 from common import create_train_data, get_data_run
 from tqdm import tqdm
 from config import *
 from loguru import logger
 from datetime import datetime as dt
-import pandas as pd
+from prefetch_generator import BackgroundGenerator
 from torch.utils.tensorboard import SummaryWriter   # to print to tensorboard
 
 warnings.filterwarnings('ignore')
@@ -67,6 +68,10 @@ if args.model == "Transformer":
     _model = modeling.Transformer_Model
 elif args.model == "LSTM":
     _model = modeling.LSTM_Model
+
+class DataLoaderX(DataLoader):
+    def __iter__(self):
+        return BackgroundGenerator(super().__iter__())
 
 def save_model(model, optimizer, lr_scheduler, epoch, syspath, ball_model_name, other="", no_update_times=0):
     model_state_dict = model.state_dict()
@@ -210,8 +215,8 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
         elif sub_name_eng == "blue":
             dataset = blue_train_data
             test_dataset = blue_test_data
-    dataloader = DataLoader(dataset, batch_size=model_args[args.name]["model_args"]["batch_size"], shuffle=True, num_workers=args.num_workers, pin_memory=True)
-    test_dataloader = DataLoader(test_dataset, batch_size=model_args[args.name]["model_args"]["batch_size"], shuffle=True, num_workers=args.num_workers, pin_memory=True)
+    dataloader = DataLoaderX(dataset, batch_size=model_args[args.name]["model_args"]["batch_size"], shuffle=True, num_workers=args.num_workers, pin_memory=True)
+    test_dataloader = DataLoaderX(test_dataset, batch_size=model_args[args.name]["model_args"]["batch_size"], shuffle=True, num_workers=args.num_workers, pin_memory=True)
     if args.init == 1:
         current_epoch = 0
         no_update_times = 0
