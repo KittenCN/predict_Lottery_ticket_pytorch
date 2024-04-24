@@ -221,8 +221,8 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
         elif sub_name_eng == "blue":
             dataset = blue_train_data
             test_dataset = blue_test_data
-    dataloader = DataLoaderX(dataset, batch_size=model_args[args.name]["model_args"]["batch_size"], shuffle=True, num_workers=args.num_workers, pin_memory=True)
-    test_dataloader = DataLoaderX(test_dataset, batch_size=model_args[args.name]["model_args"]["batch_size"], shuffle=True, num_workers=args.num_workers, pin_memory=True)
+    dataloader = DataLoaderX(dataset, batch_size=model_args[args.name]["model_args"]["batch_size"], shuffle=False, num_workers=args.num_workers, pin_memory=True)
+    test_dataloader = DataLoaderX(test_dataset, batch_size=model_args[args.name]["model_args"]["batch_size"], shuffle=False, num_workers=args.num_workers, pin_memory=True)
     if args.init == 1:
         current_epoch = 0
         no_update_times = 0
@@ -353,7 +353,7 @@ def action(name):
             ori_data = pd.read_csv("{}{}".format(name_path[name]["path"], data_file_name))
         n = -1 * args.split_time
         n_samples = int(len(ori_data['期数'].unique()) * n / 100)
-        test_list = ori_data['期数'].drop_duplicates().sample(n_samples).tolist()
+        test_list = sorted(ori_data['期数'].drop_duplicates().sample(n_samples).tolist())
     # name, windows, dataset=0, ball_type="red", cq=0, test_flag=0, test_begin=2021351, f_data=0, model="Transformer"
     red_train_data = create_train_data(name=args.name, windows=model_args[name]["model_args"]["windows_size"], dataset=1, ball_type="red", cq=args.cq, test_flag=0, test_begin=args.split_time, f_data=0, model=args.model, num_classes=model_args[name]["model_args"]["red_n_class"], test_list=test_list)
     red_test_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "red", args.cq, 1, args.split_time, model=args.model, num_classes=model_args[name]["model_args"]["red_n_class"], test_list=test_list)

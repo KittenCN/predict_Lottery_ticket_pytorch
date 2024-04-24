@@ -7,6 +7,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.utils.data as Data
 import numpy as np
+import torch.nn.functional as F
 from torch.utils.data import  Dataset
 from torch.optim.lr_scheduler import _LRScheduler
 
@@ -181,6 +182,7 @@ class LSTM_Model(nn.Module):
         self.conv1d = nn.Conv1d(in_channels=input_size, out_channels=embedding_dim*input_size, kernel_size=3, padding=1)
         self.lstm = nn.LSTM(embedding_dim*input_size, hidden_size, num_layers, dropout=dropout, batch_first=True)
         self.dropout = nn.Dropout(dropout)
+        self.attention = nn.Linear(hidden_size, 1)
         self.linear = nn.Linear(hidden_size, output_size)
 
     def forward(self, x):
@@ -194,9 +196,13 @@ class LSTM_Model(nn.Module):
         x = x.permute(0, 2, 1)  # [batch_size, seq_length, num_channels]
         lstm_out, _ = self.lstm(x)  # (batch_size, seq_len, input_size)
         lstm_out = self.dropout(lstm_out)
+        # Applying attention
+        attention_weights = F.softmax(self.attention(lstm_out), dim=1)
+        context_vector = torch.sum(attention_weights * lstm_out, dim=1)
+        linear_out = self.linear(context_vector)
         # 取最后一个时间步的输出
-        lstm_out = lstm_out[:, -1, :]  # (batch_size, hidden_size)
-        linear_out = self.linear(lstm_out)  # (batch_size, output_size)
+        # lstm_out = lstm_out[:, -1, :]  # (batch_size, hidden_size)
+        # linear_out = self.linear(lstm_out)  # (batch_size, output_size)
         # linear_out = torch.sigmoid(linear_out)
         return linear_out
 
