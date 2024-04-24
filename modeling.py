@@ -2,7 +2,6 @@
 """
 Author: KittenCN
 """
-
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -10,9 +9,6 @@ import torch.utils.data as Data
 import numpy as np
 from torch.utils.data import  Dataset
 from torch.optim.lr_scheduler import _LRScheduler
-
-import  os
-os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 
 def binary_encode_array(input_array, num_classes=80):
     """
@@ -133,8 +129,6 @@ def decode_one_hot(one_hot_encoded_data, sort_by_max_value=False, num_classes=80
         decoded_numbers = [x for _, x in sorted(zip(max_values, decoded_numbers), reverse=True)]
     
     return decoded_numbers
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model, dropout_prob=0.1, max_len=500):
