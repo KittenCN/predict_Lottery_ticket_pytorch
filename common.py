@@ -397,7 +397,8 @@ def run_predict(window_size, sequence_len, hidden_size=128, num_layers=8, num_he
                     logger.info("前K位超过阈值的数据: {}".format(row_limit))
                     logger.info("排序后前K位超过阈值的数据: {}".format(sorted(row_limit)))
             elif model == "LSTM":
-                y_pred_list = modeling.decode_one_hot(y_pred.cpu(), sort_by_max_value=True, num_classes=mini_args[mini_args.name]["model_args"]["red_n_class"])
+                softmax = nn.Softmax(dim=1)
+                y_pred_list = modeling.decode_one_hot(softmax(y_pred).cpu(), sort_by_max_value=True, num_classes=mini_args[mini_args.name]["model_args"]["red_n_class"])
                 logger.info("超过阈值的数据: {}".format(y_pred_list))
                 logger.info("排序后超过阈值的数据: {}".format(sorted(y_pred_list)))
         else:

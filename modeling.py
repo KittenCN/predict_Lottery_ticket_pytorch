@@ -177,26 +177,33 @@ class Transformer_Model(nn.Module):
         transformer_encoded = self.transformer_encoder(positional_encoded)  # (seq_len, batch_size, hidden_size)
         # transformer_encoded = self.dropout(transformer_encoded)
         linear_out = self.linear(transformer_encoded.mean(dim=0))
-        linear_out = torch.sigmoid(linear_out)
+        # linear_out = torch.sigmoid(linear_out)
         return linear_out
     
 class LSTM_Model(nn.Module): 
-    def __init__(self, input_size, output_size=20, hidden_size=512, num_layers=1, num_heads=16,dropout=0.1):
+    def __init__(self, input_size, output_size=20, hidden_size=512, num_layers=1, num_heads=16, dropout=0.1, num_embeddings=20, embedding_dim=50):
         super(LSTM_Model, self).__init__()
-
-        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, dropout=dropout, batch_first=True)
+        self.embedding = nn.Embedding(num_embeddings + 1, embedding_dim)
+        self.conv1d = nn.Conv1d(in_channels=input_size, out_channels=embedding_dim*input_size, kernel_size=3, padding=1)
+        self.lstm = nn.LSTM(embedding_dim*input_size, hidden_size, num_layers, dropout=dropout, batch_first=True)
         self.dropout = nn.Dropout(dropout)
         self.linear = nn.Linear(hidden_size, output_size)
 
     def forward(self, x):
         # LSTM 层
-        x = x.view(x.size(0), x.size(1), -1)
+        # x = x.view(x.size(0), x.size(1), -1)
+        # x: [batch_size, seq_length, num_indices]
+        x = self.embedding(x)  # [batch_size, seq_length, num_indices, embedding_dim]
+        x = x.permute(0, 2, 1, 3).contiguous()  # [batch_size, num_indices, seq_length, embedding_dim]
+        x = x.view(x.size(0), x.size(1), -1)  # [batch_size, num_indices, seq_length*embedding_dim]
+        x = self.conv1d(x)  # [batch_size, num_channels, seq_length]
+        x = x.permute(0, 2, 1)  # [batch_size, seq_length, num_channels]
         lstm_out, _ = self.lstm(x)  # (batch_size, seq_len, input_size)
         lstm_out = self.dropout(lstm_out)
         # 取最后一个时间步的输出
         lstm_out = lstm_out[:, -1, :]  # (batch_size, hidden_size)
         linear_out = self.linear(lstm_out)  # (batch_size, output_size)
-        linear_out = torch.sigmoid(linear_out)
+        # linear_out = torch.sigmoid(linear_out)
         return linear_out
 
 def train_model(model, data, labels, num_epochs, batch_size, learning_rate, device):
@@ -257,8 +264,10 @@ class MyDataset(Dataset):
             x_hot = binary_encode_array(x, self.num_classes) 
             y_hot = binary_encode_array(y, self.num_classes)
         elif self.model == 'LSTM':
-            x_hot = one_hot_encode_array(x, self.num_classes)
-            y_hot = one_hot_encode_array(y, self.num_classes)
+            # x_hot = one_hot_encode_array(x, self.num_classes)
+            # y_hot = one_hot_encode_array(y, self.num_classes)
+            x_hot = x - 1
+            y_hot = y - 1
         return x_hot, y_hot
 
 # 定义 Transformer 模型类 (废除不用)

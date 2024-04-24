@@ -23,6 +23,7 @@ from prefetch_generator import BackgroundGenerator
 from torch.utils.tensorboard import SummaryWriter   # to print to tensorboard
 
 warnings.filterwarnings('ignore')
+os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--name', default="kl8", type=str, help="选择训练数据")
@@ -38,9 +39,9 @@ parser.add_argument('--hidden_size', default=512, type=int, help="hidden_size")
 parser.add_argument('--num_layers', default=6, type=int, help="num_layers")
 parser.add_argument('--num_heads', default=8, type=int, help="num_heads")
 parser.add_argument('--tensorboard', default=0, type=int, help="tensorboard switch")
-parser.add_argument('--num_workers', default=2, type=int, help="num_workers switch")
+parser.add_argument('--num_workers', default=0, type=int, help="num_workers switch")
 parser.add_argument('--top_k', default=10, type=int, help="top_k switch")
-parser.add_argument('--model', default='Transformer', type=str, help="model name")
+parser.add_argument('--model', default='LSTM', type=str, help="model name")
 parser.add_argument('--lr', default=0.01, type=float, help="learning rate")
 parser.add_argument('--plus_mode', default=0, type=int, help="plus mode")
 parser.add_argument('--ext_times', default=1000, type=int, help="ext_times")
@@ -117,9 +118,9 @@ def load_model(m_args, syspath, sub_name_eng, model, optimizer, lr_scheduler, su
                     args.num_layers = checkpoint['num_layers']
                     args.num_heads = checkpoint['num_heads']
                     if args.model == "Transformer":
-                        model = _model(input_size=m_args["model_args"]["red_n_class"]*m_args["model_args"]["windows_size"], output_size=m_args["model_args"]["red_n_class"], hidden_size=args.hidden_size, num_layers=args.num_layers, num_heads=args.num_heads, dropout=0.5).to(modeling.device)
+                        model = _model(input_size=m_args["model_args"]["{}_n_class".format(sub_name_eng)]*m_args["model_args"]["windows_size"], output_size=m_args["model_args"]["{}_n_class".format(sub_name_eng)], hidden_size=args.hidden_size, num_layers=args.num_layers, num_heads=args.num_heads, dropout=0.5).to(modeling.device)
                     elif args.model == "LSTM":
-                        model = _model(input_size=m_args["model_args"]["red_sequence_len"]*m_args["model_args"]["red_n_class"], output_size=m_args["model_args"]["red_sequence_len"]*m_args["model_args"]["red_n_class"], hidden_size=args.hidden_size, num_layers=args.num_layers, num_heads=args.num_heads, dropout=0.5).to(modeling.device)
+                        model = _model(input_size=m_args["model_args"]["{}_sequence_len".format(sub_name_eng)], output_size=m_args["model_args"]["{}_sequence_len".format(sub_name_eng)]*m_args["model_args"]["{}_n_class".format(sub_name_eng)], hidden_size=args.hidden_size, num_layers=args.num_layers, num_heads=args.num_heads, dropout=0.5, num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)], embedding_dim=50).to(modeling.device)
                     optimizer = optim.Adam(model.parameters(), lr=args.lr)
                     lr_scheduler = modeling.CustomSchedule(optimizer=optimizer, d_model=args.hidden_size, warmup_steps=model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]*0.2)
                 else:
@@ -172,10 +173,11 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     if args.model == "Transformer":
         model = _model(input_size=m_args["model_args"]["{}_n_class".format(sub_name_eng)]*m_args["model_args"]["windows_size"], output_size=m_args["model_args"]["{}_n_class".format(sub_name_eng)], hidden_size=args.hidden_size, num_layers=args.num_layers, num_heads=args.num_heads, dropout=0.5).to(modeling.device)
     elif args.model == "LSTM":
-        model = _model(input_size=m_args["model_args"]["{}_sequence_len".format(sub_name_eng)]*m_args["model_args"]["{}_n_class".format(sub_name_eng)], output_size=m_args["model_args"]["{}_sequence_len".format(sub_name_eng)]*m_args["model_args"]["{}_n_class".format(sub_name_eng)], hidden_size=args.hidden_size, num_layers=args.num_layers, num_heads=args.num_heads, dropout=0.5).to(modeling.device)
+        model = _model(input_size=m_args["model_args"]["{}_sequence_len".format(sub_name_eng)], output_size=m_args["model_args"]["{}_sequence_len".format(sub_name_eng)]*m_args["model_args"]["{}_n_class".format(sub_name_eng)], hidden_size=args.hidden_size, num_layers=args.num_layers, num_heads=args.num_heads, dropout=0.5, num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)], embedding_dim=50).to(modeling.device)
     # criterion = nn.MSELoss()
     # criterion = nn.BCEWithLogitsLoss() # 二分类交叉熵
-    criterion = nn.BCELoss() # 二分类交叉熵
+    # criterion = nn.BCELoss() # 二分类交叉熵
+    criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
     # lr_scheduler=modeling.CustomSchedule(d_model=args.hidden_size, optimizer=optimizer)
     lr_scheduler = modeling.CustomSchedule(optimizer=optimizer, d_model=args.hidden_size, warmup_steps=model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]*0.2)
@@ -246,10 +248,10 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
             model.train()
             running_times += 1
             x, y = batch
-            x = x.float().to(modeling.device)
-            y = y.float().to(modeling.device)
-            y_pred = model(x)
-            t_loss = criterion(y_pred, y.view(y.size(0), -1))
+            x = x.long().to(modeling.device)
+            y = y.long().to(modeling.device)
+            y_pred = model(x).view(-1, m_args["model_args"]["{}_sequence_len".format(sub_name_eng)], m_args["model_args"]["{}_n_class".format(sub_name_eng)])
+            t_loss = criterion(y_pred.transpose(1,2), y.view(y.size(0), -1))
             optimizer.zero_grad()
             t_loss.backward()
             optimizer.step()
@@ -275,10 +277,12 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
                 for batch in test_dataloader:
                     test_times += 1
                     x, y = batch
-                    x = x.float().to(modeling.device)
-                    y = y.float().to(modeling.device)
-                    y_pred = model(x)
-                    tt_loss = criterion(y_pred, y.view(y.size(0), -1))
+                    x = x.long().to(modeling.device)
+                    y = y.long().to(modeling.device)
+                    y_pred = model(x).view(-1, m_args["model_args"]["{}_sequence_len".format(sub_name_eng)], m_args["model_args"]["{}_n_class".format(sub_name_eng)])
+                    # _, targets = torch.squeeze(y, 1).max(dim=1)
+                    tt_loss = criterion(y_pred.transpose(1,2), y.view(y.size(0), -1)) 
+                    # tt_loss = criterion(y_pred, torch.squeeze(y, 1))
                     # test_loss += tt_loss.item() * x.size(0)
                     test_loss += tt_loss.item()
                     # calculate topk loss
@@ -297,11 +301,13 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
                             tatal_correct += sum([1 for j in indices[i] if j in target_indices])
                     elif args.model == "LSTM":
                         for i in range(x.size(0)):
-                            _ele = modeling.decode_one_hot(y_pred[i], sort_by_max_value=True, num_classes=m_args["model_args"]["{}_n_class".format(sub_name_eng)])
+                            softmax = nn.Softmax(dim=1)
+                            _ele = modeling.decode_one_hot(softmax(y_pred[i]), sort_by_max_value=True, num_classes=m_args["model_args"]["{}_n_class".format(sub_name_eng)])
                             topk_times += args.top_k
                             top_times += m_args["model_args"]["{}_sequence_len".format(sub_name_eng)]
                             # target_indices = y[i].nonzero(as_tuple=False).squeeze()
-                            target_indices = modeling.decode_one_hot(y[i], num_classes=m_args["model_args"]["{}_n_class".format(sub_name_eng)])
+                            # target_indices = modeling.decode_one_hot(y[i], num_classes=m_args["model_args"]["{}_n_class".format(sub_name_eng)])
+                            target_indices = (y+1).view(y.size(0), -1).tolist()[i]
                             total_correct += sum([1 for j in _ele[0:args.top_k] if j in target_indices])
                             tatal_correct += sum([1 for j in _ele if j in target_indices])
                 # logger.info("Epoch {}/{} Test Loss: {:.2e}".format(epoch+1, model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)], test_loss / len(test_dataset)))
