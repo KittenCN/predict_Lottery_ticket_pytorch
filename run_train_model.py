@@ -45,7 +45,7 @@ parser.add_argument('--ext_times', default=1000, type=int, help="ext_times")
 parser.add_argument('--init', default=0, type=int, help="init")
 parser.add_argument('--train_mode', default=0, type=int, help="0: mormal, 1: new trainning, 2: best trainning")
 parser.add_argument('--split_time', default=2021351, type=int, help="tranning data split time")
-parser.add_argument('--GPU', default=1, type=int, help="use GPU or not")
+parser.add_argument('--GPU', default=0, type=int, help="use GPU or not")
 args = parser.parse_args()
 
 warnings.filterwarnings('ignore')
@@ -122,9 +122,9 @@ def load_model(m_args, syspath, sub_name_eng, model, optimizer, lr_scheduler, su
                     args.num_layers = checkpoint['num_layers']
                     args.num_heads = checkpoint['num_heads']
                     if args.model == "Transformer":
-                        model = _model(input_size=m_args["model_args"]["{}_n_class".format(sub_name_eng)]*m_args["model_args"]["windows_size"], output_size=m_args["model_args"]["{}_n_class".format(sub_name_eng)], hidden_size=args.hidden_size, num_layers=args.num_layers, num_heads=args.num_heads, dropout=0.5).to(modeling.device)
+                        model = _model(input_size=m_args["model_args"]["{}_n_class".format(sub_name_eng)]*m_args["model_args"]["windows_size"], output_size=m_args["model_args"]["{}_n_class".format(sub_name_eng)], hidden_size=args.hidden_size, num_layers=args.num_layers, num_heads=args.num_heads, dropout=0.5).to(device)
                     elif args.model == "LSTM":
-                        model = _model(input_size=m_args["model_args"]["{}_sequence_len".format(sub_name_eng)], output_size=m_args["model_args"]["{}_sequence_len".format(sub_name_eng)]*m_args["model_args"]["{}_n_class".format(sub_name_eng)], hidden_size=args.hidden_size, num_layers=args.num_layers, num_heads=args.num_heads, dropout=0.5, num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)], embedding_dim=50).to(modeling.device)
+                        model = _model(input_size=m_args["model_args"]["{}_sequence_len".format(sub_name_eng)], output_size=m_args["model_args"]["{}_sequence_len".format(sub_name_eng)]*m_args["model_args"]["{}_n_class".format(sub_name_eng)], hidden_size=args.hidden_size, num_layers=args.num_layers, num_heads=args.num_heads, dropout=0.5, num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)], embedding_dim=50).to(device)
                     optimizer = optim.Adam(model.parameters(), lr=args.lr)
                     lr_scheduler = modeling.CustomSchedule(optimizer=optimizer, d_model=args.hidden_size, warmup_steps=model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]*0.2)
                 else:
@@ -175,9 +175,9 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     logger.info("标签数据维度: {}".format(dataset.data.shape))
     # 定义模型和优化器
     if args.model == "Transformer":
-        model = _model(input_size=m_args["model_args"]["{}_n_class".format(sub_name_eng)]*m_args["model_args"]["windows_size"], output_size=m_args["model_args"]["{}_n_class".format(sub_name_eng)], hidden_size=args.hidden_size, num_layers=args.num_layers, num_heads=args.num_heads, dropout=0.5).to(modeling.device)
+        model = _model(input_size=m_args["model_args"]["{}_n_class".format(sub_name_eng)]*m_args["model_args"]["windows_size"], output_size=m_args["model_args"]["{}_n_class".format(sub_name_eng)], hidden_size=args.hidden_size, num_layers=args.num_layers, num_heads=args.num_heads, dropout=0.5).to(device)
     elif args.model == "LSTM":
-        model = _model(input_size=m_args["model_args"]["{}_sequence_len".format(sub_name_eng)], output_size=m_args["model_args"]["{}_sequence_len".format(sub_name_eng)]*m_args["model_args"]["{}_n_class".format(sub_name_eng)], hidden_size=args.hidden_size, num_layers=args.num_layers, num_heads=args.num_heads, dropout=0.5, num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)], embedding_dim=50).to(modeling.device)
+        model = _model(input_size=m_args["model_args"]["{}_sequence_len".format(sub_name_eng)], output_size=m_args["model_args"]["{}_sequence_len".format(sub_name_eng)]*m_args["model_args"]["{}_n_class".format(sub_name_eng)], hidden_size=args.hidden_size, num_layers=args.num_layers, num_heads=args.num_heads, dropout=0.5, num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)], embedding_dim=50).to(device)
     # criterion = nn.MSELoss()
     # criterion = nn.BCEWithLogitsLoss() # 二分类交叉熵
     # criterion = nn.BCELoss() # 二分类交叉熵
@@ -252,8 +252,8 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
             model.train()
             running_times += 1
             x, y = batch
-            x = x.long().to(modeling.device)
-            y = y.long().to(modeling.device)
+            x = x.long().to(device)
+            y = y.long().to(device)
             y_pred = model(x).view(-1, m_args["model_args"]["{}_sequence_len".format(sub_name_eng)], m_args["model_args"]["{}_n_class".format(sub_name_eng)])
             t_loss = criterion(y_pred.transpose(1,2), y.view(y.size(0), -1))
             optimizer.zero_grad()
@@ -281,8 +281,8 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
                 for batch in test_dataloader:
                     test_times += 1
                     x, y = batch
-                    x = x.long().to(modeling.device)
-                    y = y.long().to(modeling.device)
+                    x = x.long().to(device)
+                    y = y.long().to(device)
                     y_pred = model(x).view(-1, m_args["model_args"]["{}_sequence_len".format(sub_name_eng)], m_args["model_args"]["{}_n_class".format(sub_name_eng)])
                     # _, targets = torch.squeeze(y, 1).max(dim=1)
                     tt_loss = criterion(y_pred.transpose(1,2), y.view(y.size(0), -1)) 
