@@ -109,7 +109,7 @@ def load_model(m_args, syspath, sub_name_eng, model, optimizer, lr_scheduler, su
     address = "{}{}_ball_model_pytorch_{}{}.{}".format(syspath, sub_name_eng, args.model, other, extension)
     if os.path.exists(address):
         # model.load_state_dict(torch.load("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)))
-        checkpoint = torch.load(address)
+        checkpoint = torch.load(address, map_location=device)
         if 'windows_size' in checkpoint and 'batch_size' in checkpoint and 'hidden_size' in checkpoint and 'num_layers' in checkpoint and 'num_heads' in checkpoint:
             if checkpoint['windows_size'] != args.windows_size or checkpoint['batch_size'] != args.batch_size or checkpoint['hidden_size'] != args.hidden_size or checkpoint['num_layers'] != args.num_layers or checkpoint['num_heads'] != args.num_heads:
                 logger.info("模型参数不一致！")

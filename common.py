@@ -318,7 +318,7 @@ def init():
     pred_key_d = {}
     mini_args = {}
 
-def predict_ball_model(name, dataset, sequence_len, sub_name="红球", window_size=1, hidden_size=128, num_layers=8, num_heads=16, input_size=20, output_size=20, model_name="Transformer", args=None):
+def predict_ball_model(name, dataset, sequence_len, sub_name="红球", window_size=1, hidden_size=128, num_layers=8, num_heads=16, input_size=20, output_size=20, model_name="Transformer", args=None, device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu")):
     """ 模型训练
     :param name: 玩法
     :param x_data: 训练样本
@@ -344,7 +344,7 @@ def predict_ball_model(name, dataset, sequence_len, sub_name="红球", window_si
         _model = modeling.Transformer_Model
     elif model_name == "LSTM":
         _model = modeling.LSTM_Model
-    model = _model(input_size=input_size, output_size=output_size, hidden_size=hidden_size, num_layers=num_layers, num_heads=num_heads, dropout=0.5).to(modeling.device)
+    model = _model(input_size=input_size, output_size=output_size, hidden_size=hidden_size, num_layers=num_layers, num_heads=num_heads, dropout=0.5).to(device)
     if os.path.exists("{}{}_ball_model_pytorch_{}.ckpt".format(syspath, sub_name_eng, model_name)):
         # model.load_state_dict(torch.load("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)))
         checkpoint = torch.load("{}{}_ball_model_pytorch_{}.ckpt".format(syspath, sub_name_eng, model_name))
@@ -356,7 +356,7 @@ def predict_ball_model(name, dataset, sequence_len, sub_name="红球", window_si
                 args.hidden_size = checkpoint['hidden_size']
                 args.num_layers = checkpoint['num_layers']
                 args.num_heads = checkpoint['num_heads']
-                model = _model(input_size=input_size, output_size=output_size, hidden_size=hidden_size, num_layers=num_layers, num_heads=num_heads, dropout=0.5).to(modeling.device)
+                model = _model(input_size=input_size, output_size=output_size, hidden_size=hidden_size, num_layers=num_layers, num_heads=num_heads, dropout=0.5).to(device)
         else:
             logger.info("模型不是最新版本，建议重新训练！")
         model.load_state_dict(checkpoint['model_state_dict'])
@@ -364,12 +364,12 @@ def predict_ball_model(name, dataset, sequence_len, sub_name="红球", window_si
     model.eval()
     for batch in dataloader:
         x, y = batch
-        x = x.to(modeling.device)
-        y = y.to(modeling.device)
+        x = x.to(device)
+        y = y.to(device)
         y_pred = model(x.float())
     return y_pred, name_list
 
-def run_predict(window_size, sequence_len, hidden_size=128, num_layers=8, num_heads=16, input_size=20, output_size=20, f_data=0, model="Transformer", args=None):
+def run_predict(window_size, sequence_len, hidden_size=128, num_layers=8, num_heads=16, input_size=20, output_size=20, f_data=0, model="Transformer", args=None, device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu")):
     global pred_key_d
     balls = ['red', 'blue'] if mini_args.name not in ["pls", "kl8"] else ['red']
     for sub_name_eng in balls:
@@ -379,8 +379,8 @@ def run_predict(window_size, sequence_len, hidden_size=128, num_layers=8, num_he
         syspath = model_path + model_args[mini_args.name]["pathname"]['name'] + str(mini_args.windows_size) + model_args[mini_args.name]["subpath"][sub_name_eng]
         # redpath = model_path + model_args[mini_args.name]["pathname"]['name'] + str(model_args[mini_args.name]["model_args"]["windows_size"]) + model_args[mini_args.name]["subpath"]['red']
         # bluepath = model_path + model_args[mini_args.name]["pathname"]['name'] + str(model_args[mini_args.name]["model_args"]["windows_size"]) + model_args[mini_args.name]["subpath"]['blue']
-        # model = modeling.TransformerModel(input_size=20, output_size=20).to(modeling.device)
-        if os.path.exists("{}{}_ball_model_pytorch_{}.ckpt".format(syspath, sub_name_eng, model)):
+        # model = modeling.TransformerModel(input_size=20, output_size=20).to(device)
+        if os.path.exists("{}{}_ball_model_pytorch_{}.ckpt".format(syspath, sub_name_eng, model), map_location=device):
             # model.load_state_dict(torch.load("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)))
             # logger.info("已加载{}模型！窗口大小:{}".format(sub_name, model_args[mini_args.name]["model_args"]["windows_size"]))
             current_number = get_current_number(mini_args.name)
