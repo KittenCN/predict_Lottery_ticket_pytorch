@@ -234,15 +234,17 @@ class CustomSchedule(_LRScheduler):
 
 # 定义数据集类
 class MyDataset(Dataset):
-    def __init__(self, data, windows, cut_num, model='Transformer', num_classes=80):
+    def __init__(self, data, windows, cut_num, model='Transformer', num_classes=80, test_flag=0, test_list=[]):
         tmp = []
         for i in range(len(data) - windows):
             if cut_num > 0:
-                sub_data = data[i:(i+windows+1), :cut_num]
-                tmp.append(sub_data.reshape(windows+1, cut_num))
+                if len(test_list) <= 0 or (test_flag == 0 and data[i][1] not in test_list) or (test_flag == 1 and data[i][1] in test_list):
+                    sub_data = data[i:(i+windows+1), 2:cut_num+2]
+                    tmp.append(sub_data.reshape(windows+1, cut_num))
             else:
-                sub_data = data[i:(i+windows+1), cut_num*(-1):]
-                tmp.append(sub_data.reshape(windows+1, data.shape[1]-(cut_num*(-1))))
+                if len(test_list) <= 0 or (test_flag == 0 and data[i][1] not in test_list) or (test_flag == 1 and data[i][1] in test_list):
+                    sub_data = data[i:(i+windows+1), cut_num*(-1):]
+                    tmp.append(sub_data.reshape(windows+1, data.shape[1]-(cut_num*(-1))))
         self.data = np.array(tmp)
         self.model = model
         self.num_classes = num_classes

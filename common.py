@@ -57,7 +57,7 @@ def create_train_data(name, windows, dataset=0, ball_type="red", cq=0, test_flag
         else:
             ori_data = pd.read_csv("{}{}".format(name_path[name]["path"], data_file_name))
     data = ori_data.copy()
-    if test_begin >= 0:
+    if test_begin >= 0 and len(test_list) <= 0:
         if f_data == 0:
             if test_flag == 0:
                 data = data[data['期数'] > test_begin]
@@ -66,11 +66,11 @@ def create_train_data(name, windows, dataset=0, ball_type="red", cq=0, test_flag
         else:
             data = data[data['期数'] <= f_data]
             data = data.head(windows + 1)
-    elif len(test_list) > 0:
-        if test_flag == 0:
-            data = data[~data['期数'].isin(test_list)]
-        else:
-            data = data[data['期数'].isin(test_list)]
+    # elif len(test_list) > 0:
+    #     if test_flag == 0:
+    #         data = data[~data['期数'].isin(test_list)]
+    #     else:
+    #         data = data[data['期数'].isin(test_list)]
 
     if not len(data):
         raise logger.error(" 请执行 get_data.py 进行数据下载！")
@@ -80,7 +80,7 @@ def create_train_data(name, windows, dataset=0, ball_type="red", cq=0, test_flag
             os.mkdir(model_path)
         # logger.info(strball + strflag + "数据已加载! ")
 
-    data = data.iloc[:, 2:].values
+    data = data.iloc[:, :].values
     tmp = []
     for _data in data:
         _tmp = []
@@ -106,9 +106,9 @@ def create_train_data(name, windows, dataset=0, ball_type="red", cq=0, test_flag
         }
     else:
         if ball_type == "red":
-            dataset = modeling.MyDataset(data, windows, cut_num, model, num_classes)
+            dataset = modeling.MyDataset(data, windows, cut_num, model, num_classes, test_flag, test_list)
         else:
-            dataset = modeling.MyDataset(data, windows, cut_num * -1, model, num_classes)
+            dataset = modeling.MyDataset(data, windows, cut_num * -1, model, num_classes, test_flag, test_list)
         logger.info(strball + strflag + "集数据维度: {}".format(dataset.data.shape))
         return dataset
 
