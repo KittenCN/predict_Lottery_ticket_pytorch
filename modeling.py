@@ -267,9 +267,9 @@ class MyDataset(Dataset):
             y_hot = binary_encode_array(y, self.num_classes)
         elif self.model == 'LSTM':
             # x_hot = one_hot_encode_array(x, self.num_classes)
-            # y_hot = one_hot_encode_array(y, self.num_classes)
+            y_hot = one_hot_encode_array(y, self.num_classes)
             x_hot = x - 1
-            y_hot = y - 1
+            # y_hot = y - 1
         return x_hot, y_hot
 
 # 定义 Transformer 模型类 (废除不用)
@@ -295,3 +295,30 @@ class TransformerModel(nn.Module):
         x = self.linear(x) # 对输出进行线性变换(batch_size, seq_len, output_size)
         x = x[:, -1, :] # 取最后一个时间步的输出作为模型的输出(batch_size, output_size)
         return x
+
+
+class IoULoss(nn.Module):
+    def __init__(self, smooth=1):
+        super(IoULoss, self).__init__()
+        self.smooth = smooth
+    def forward(self, preds, targets):
+        # Convert logits to probabilities
+        preds_probs = torch.sigmoid(preds)
+
+        # Generate binary predictions by thresholding
+        # preds_binary = (preds_probs > threshold).float()
+
+        # Reduce across the position dimension by checking max, simulating any()
+        # We directly use the output of torch.max operation to keep grad
+        preds_reduced = torch.max(preds_probs, dim=1)[0]  # Correctly using max output
+        targets_reduced = torch.max(targets, dim=1)[0]
+
+        # Calculate intersection and union
+        intersection = (preds_reduced * targets_reduced).sum(dim=1)
+        union = (preds_reduced + targets_reduced - preds_reduced * targets_reduced).sum(dim=1)
+
+        # Calculate IoU and IoU loss
+        iou = intersection / (union + 1e-6)  # Adding a small epsilon to avoid division by zero
+        iou_loss = 1 - iou.mean()  # Average IoU loss over the batch
+
+        return iou_loss
