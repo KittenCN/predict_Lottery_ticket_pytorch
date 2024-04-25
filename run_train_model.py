@@ -134,26 +134,27 @@ def load_model(m_args, syspath, sub_name_eng, model, optimizer, lr_scheduler, sc
         else:
             logger.info("模型不是最新版本，建议重新训练！")
         model.load_state_dict(checkpoint['model_state_dict'])
-        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        lr_scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
-        scaler.load_state_dict(checkpoint['scaler_state_dict'])
-        if 'epoch' in checkpoint:
-            current_epoch = checkpoint['epoch']
-            if current_epoch >= model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)] - 1:
-                current_epoch = 0
+        if args.init != 1:
+            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            lr_scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+            scaler.load_state_dict(checkpoint['scaler_state_dict'])
+            if 'epoch' in checkpoint:
+                current_epoch = checkpoint['epoch']
+                if current_epoch >= model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)] - 1:
+                    current_epoch = 0
+            if 'no_update_times' in checkpoint:
+                no_update_times = checkpoint['no_update_times']
+            if 'split_time' in checkpoint:
+                split_time = checkpoint['split_time']
+            if 'test_list' in checkpoint:
+                _test_list = checkpoint['test_list']
+            if split_time < 0 and len(_test_list) <= 0:
+                logger.warning("测试数据集丢失，请重新训练！")
+                sys.exit()
         if 'start_dt' in checkpoint:
             start_dt = checkpoint['start_dt']
         if 'best_score' in checkpoint:
             best_score = checkpoint['best_score']
-        if 'no_update_times' in checkpoint:
-            no_update_times = checkpoint['no_update_times']
-        if 'split_time' in checkpoint:
-            split_time = checkpoint['split_time']
-        if 'test_list' in checkpoint:
-            _test_list = checkpoint['test_list']
-        if split_time < 0 and len(_test_list) <= 0:
-            logger.warning("测试数据集丢失，请重新训练！")
-            sys.exit()
         logger.info("已加载{}模型！".format(sub_name))
     else:
         logger.info("没有找到{}模型，将重新训练！".format(sub_name))
@@ -229,6 +230,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     if args.init == 1:
         current_epoch = 0
         no_update_times = 0
+        scaler = GradScaler()
         optimizer = optim.Adam(model.parameters(), lr=args.lr)
         lr_scheduler = modeling.CustomSchedule(optimizer=optimizer, d_model=args.hidden_size, warmup_steps=model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]*0.2)   
     logger.info("当前epoch是 {}, 初次启动时间是 {}, 最佳分数是 {:.2e}".format(current_epoch, start_dt, best_score))
