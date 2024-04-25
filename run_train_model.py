@@ -350,8 +350,17 @@ def action(name):
         else:
             ori_data = pd.read_csv("{}{}".format(name_path[name]["path"], data_file_name))
         n = -1 * args.split_time
-        n_samples = int(len(ori_data['期数'].unique()) * n / 100)
+        if n <= 100:
+            n_samples = int(len(ori_data['期数'].unique()) * n / 100)
+        if n > 100:
+            n_samples = 1
         test_list = sorted(ori_data['期数'].drop_duplicates().sample(n_samples).tolist())
+        if n > 100:
+            _n_samples = int(len(ori_data['期数'].unique()) * (n - 100) / 100)
+            while int(ori_data[ori_data['期数'] == test_list[0]]['Unnamed: 0']) < _n_samples:
+                test_list = sorted(ori_data['期数'].drop_duplicates().sample(_n_samples).tolist())
+            for item in range(int(ori_data[ori_data['期数'] == test_list[0]]['Unnamed: 0']) - 1, int(ori_data[ori_data['期数'] == test_list[0]]['Unnamed: 0']) - _n_samples, -1):
+                test_list.append(int(ori_data[ori_data['Unnamed: 0'] == item]['期数']))
     # name, windows, dataset=0, ball_type="red", cq=0, test_flag=0, test_begin=2021351, f_data=0, model="Transformer"
     red_train_data = create_train_data(name=args.name, windows=model_args[name]["model_args"]["windows_size"], dataset=1, ball_type="red", cq=args.cq, test_flag=0, test_begin=args.split_time, f_data=0, model=args.model, num_classes=model_args[name]["model_args"]["red_n_class"], test_list=test_list)
     red_test_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "red", args.cq, 1, args.split_time, model=args.model, num_classes=model_args[name]["model_args"]["red_n_class"], test_list=test_list)
