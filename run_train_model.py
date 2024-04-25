@@ -20,6 +20,7 @@ from config import *
 from loguru import logger
 from datetime import datetime as dt
 from prefetch_generator import BackgroundGenerator
+from torch.autograd import Variable
 from torch.utils.tensorboard import SummaryWriter   # to print to tensorboard
 
 parser = argparse.ArgumentParser()
@@ -181,7 +182,8 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     # criterion = nn.MSELoss()
     # criterion = nn.BCEWithLogitsLoss() # 二分类交叉熵
     # criterion = nn.BCELoss() # 二分类交叉熵
-    criterion = nn.CrossEntropyLoss()
+    # criterion = nn.CrossEntropyLoss()
+    criterion = modeling.IoULoss()
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
     # lr_scheduler=modeling.CustomSchedule(d_model=args.hidden_size, optimizer=optimizer)
     lr_scheduler = modeling.CustomSchedule(optimizer=optimizer, d_model=args.hidden_size, warmup_steps=model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]*0.2)
@@ -255,7 +257,9 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
             x = x.long().to(device)
             y = y.long().to(device)
             y_pred = model(x).view(-1, m_args["model_args"]["{}_sequence_len".format(sub_name_eng)], m_args["model_args"]["{}_n_class".format(sub_name_eng)])
-            t_loss = criterion(y_pred.transpose(1,2), y.view(y.size(0), -1))
+            # y_pred =  Variable(y_pred, requires_grad=True)
+            targets = torch.squeeze(y, 1)
+            t_loss = criterion(y_pred, targets)
             optimizer.zero_grad()
             t_loss.backward()
             optimizer.step()
@@ -285,7 +289,8 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
                     y = y.long().to(device)
                     y_pred = model(x).view(-1, m_args["model_args"]["{}_sequence_len".format(sub_name_eng)], m_args["model_args"]["{}_n_class".format(sub_name_eng)])
                     # _, targets = torch.squeeze(y, 1).max(dim=1)
-                    tt_loss = criterion(y_pred.transpose(1,2), y.view(y.size(0), -1)) 
+                    targets = torch.squeeze(y, 1)
+                    tt_loss = criterion(y_pred, targets)
                     # tt_loss = criterion(y_pred, torch.squeeze(y, 1))
                     # test_loss += tt_loss.item() * x.size(0)
                     test_loss += tt_loss.item()
@@ -310,8 +315,8 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
                             topk_times += args.top_k
                             top_times += m_args["model_args"]["{}_sequence_len".format(sub_name_eng)]
                             # target_indices = y[i].nonzero(as_tuple=False).squeeze()
-                            # target_indices = modeling.decode_one_hot(y[i], num_classes=m_args["model_args"]["{}_n_class".format(sub_name_eng)])
-                            target_indices = (y+1).view(y.size(0), -1).tolist()[i]
+                            target_indices = modeling.decode_one_hot(y[i], num_classes=m_args["model_args"]["{}_n_class".format(sub_name_eng)])
+                            # target_indices = (y+1).view(y.size(0), -1).tolist()[i]
                             total_correct += sum([1 for j in _ele[0:args.top_k] if j in target_indices])
                             tatal_correct += sum([1 for j in _ele if j in target_indices])
                 # logger.info("Epoch {}/{} Test Loss: {:.2e}".format(epoch+1, model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)], test_loss / len(test_dataset)))
