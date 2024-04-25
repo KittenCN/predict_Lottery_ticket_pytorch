@@ -20,6 +20,7 @@ from config import *
 from loguru import logger
 from datetime import datetime as dt
 from prefetch_generator import BackgroundGenerator
+from torch.cuda.amp import GradScaler, autocast
 from torch.utils.tensorboard import SummaryWriter   # to print to tensorboard
 
 parser = argparse.ArgumentParser()
@@ -78,14 +79,16 @@ class DataLoaderX(DataLoader):
     def __iter__(self):
         return BackgroundGenerator(super().__iter__())
 
-def save_model(model, optimizer, lr_scheduler, epoch, syspath, ball_model_name, other="", no_update_times=0):
+def save_model(model, optimizer, lr_scheduler, scaler, epoch, syspath, ball_model_name, other="", no_update_times=0):
     model_state_dict = model.state_dict()
     optimizer_state_dict = optimizer.state_dict()
     scheduler_state_dict = lr_scheduler.state_dict() 
+    scaler_state_dict = scaler.state_dict()
     save_dict = {
         'model_state_dict': model_state_dict,
         'optimizer_state_dict': optimizer_state_dict,
         'scheduler_state_dict': scheduler_state_dict,
+        'scaler_state_dict': scaler_state_dict,
         'epoch': epoch,
         'start_dt': start_dt,
         'windows_size': args.windows_size,
@@ -99,7 +102,7 @@ def save_model(model, optimizer, lr_scheduler, epoch, syspath, ball_model_name, 
     }
     torch.save(save_dict, "{}{}_pytorch_{}{}.{}".format(syspath, ball_model_name, args.model, other, extension))
 
-def load_model(m_args, syspath, sub_name_eng, model, optimizer, lr_scheduler, sub_name="红球", other=""):
+def load_model(m_args, syspath, sub_name_eng, model, optimizer, lr_scheduler, scaler, sub_name="红球", other=""):
     global best_score, start_dt
     _test_list = []
     current_epoch = 0
@@ -133,6 +136,7 @@ def load_model(m_args, syspath, sub_name_eng, model, optimizer, lr_scheduler, su
         model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         lr_scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+        scaler.load_state_dict(checkpoint['scaler_state_dict'])
         if 'epoch' in checkpoint:
             current_epoch = checkpoint['epoch']
             if current_epoch >= model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)] - 1:
@@ -187,6 +191,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     no_update_times = 0
     split_time = args.split_time
     _other = ""
+    scaler = GradScaler()
     if args.train_mode != 1:
         if args.train_mode == 2:
             _files = glob.glob(os.path.join(syspath, '*best*'))
@@ -201,7 +206,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
                     logger.info("模型没有最优版本，将读取最后版本继续训练！")
         elif args.train_mode == 0:
             logger.info("系统将尝试读取最后版本继续训练！")
-        current_epoch, no_update_times, split_time, _test_list = load_model(m_args, syspath, sub_name_eng, model, optimizer, lr_scheduler, sub_name, other=_other)
+        current_epoch, no_update_times, split_time, _test_list = load_model(m_args, syspath, sub_name_eng, model, optimizer, lr_scheduler, scaler, sub_name, other=_other)
     else:
         logger.info("系统将重新训练！")
     if split_time != args.split_time or (split_time < 0 and set(_test_list) != set(test_list) and len(_test_list) > 0):
@@ -241,7 +246,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
         if no_update_times > args.ext_times and args.plus_mode == 1:
             print()
             no_update_times = 0
-            _, _, _, _ = load_model(m_args, syspath, sub_name_eng, model, optimizer, lr_scheduler, sub_name, other="_{}_{}".format(start_dt, "best"))
+            _, _, _, _ = load_model(m_args, syspath, sub_name_eng, model, optimizer, lr_scheduler, scaler, sub_name, other="_{}_{}".format(start_dt, "best"))
         if epoch == current_epoch:
             pbar.update(current_epoch)
         running_loss = 0.0
@@ -252,11 +257,16 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
             x, y = batch
             x = x.long().to(device)
             y = y.long().to(device)
-            y_pred = model(x).view(-1, m_args["model_args"]["{}_sequence_len".format(sub_name_eng)], m_args["model_args"]["{}_n_class".format(sub_name_eng)])
-            t_loss = criterion(y_pred.transpose(1,2), y.view(y.size(0), -1))
             optimizer.zero_grad()
-            t_loss.backward()
-            optimizer.step()
+            with autocast():
+                y_pred = model(x).view(-1, m_args["model_args"]["{}_sequence_len".format(sub_name_eng)], m_args["model_args"]["{}_n_class".format(sub_name_eng)])
+                t_loss = criterion(y_pred.transpose(1,2), y.view(y.size(0), -1))
+            scaler.scale(t_loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+            # optimizer.zero_grad()
+            # t_loss.backward()
+            # optimizer.step()
             # running_loss += t_loss.item() * x.size(0)
             running_loss += t_loss.item()
         # print(f"Epoch {epoch+1}: Loss = {running_loss / len(dataset):.4f}")
@@ -264,7 +274,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
         if (epoch + 1) % save_epoch == 0:
             if time.time() - last_save_time > save_interval:
                 last_save_time = time.time()
-                save_model(model, optimizer, lr_scheduler, epoch, syspath, ball_model_name, no_update_times=no_update_times)
+                save_model(model, optimizer, lr_scheduler, scaler, epoch, syspath, ball_model_name, no_update_times=no_update_times)
             # run test
             model.eval()
             with torch.no_grad():
@@ -281,10 +291,11 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
                     x, y = batch
                     x = x.long().to(device)
                     y = y.long().to(device)
-                    y_pred = model(x).view(-1, m_args["model_args"]["{}_sequence_len".format(sub_name_eng)], m_args["model_args"]["{}_n_class".format(sub_name_eng)])
-                    # _, targets = torch.squeeze(y, 1).max(dim=1)
-                    tt_loss = criterion(y_pred.transpose(1,2), y.view(y.size(0), -1)) 
-                    # tt_loss = criterion(y_pred, torch.squeeze(y, 1))
+                    with autocast():
+                        y_pred = model(x).view(-1, m_args["model_args"]["{}_sequence_len".format(sub_name_eng)], m_args["model_args"]["{}_n_class".format(sub_name_eng)])
+                        # _, targets = torch.squeeze(y, 1).max(dim=1)
+                        tt_loss = criterion(y_pred.transpose(1,2), y.view(y.size(0), -1)) 
+                        # tt_loss = criterion(y_pred, torch.squeeze(y, 1))
                     # test_loss += tt_loss.item() * x.size(0)
                     test_loss += tt_loss.item()
                     # calculate topk loss
@@ -318,11 +329,11 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
             if top_loss < best_score:
                 no_update_times = 0
                 best_score = top_loss
-                save_model(model, optimizer, lr_scheduler, epoch, syspath, ball_model_name, other="_{}_{}".format(start_dt, "best"), no_update_times=no_update_times)
+                save_model(model, optimizer, lr_scheduler, scaler, epoch, syspath, ball_model_name, other="_{}_{}".format(start_dt, "best"), no_update_times=no_update_times)
             if topk_loss < best_score:
                 no_update_times = 0
                 best_score = topk_loss
-                save_model(model, optimizer, lr_scheduler, epoch, syspath, ball_model_name, other="_{}_{}".format(start_dt, "best"), no_update_times=no_update_times)
+                save_model(model, optimizer, lr_scheduler, scaler, epoch, syspath, ball_model_name, other="_{}_{}".format(start_dt, "best"), no_update_times=no_update_times)
         if args.tensorboard == 1:
             writer.add_scalar('Loss/Running', running_loss / (running_times if running_times > 0 else 1), epoch)
             if (epoch + 1) % save_epoch == 0:
@@ -333,7 +344,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
         pbar.update(1)
     if args.tensorboard == 1:
         writer.close()
-    save_model(model, optimizer, lr_scheduler, epoch, syspath, ball_model_name, other="_{}".format(start_dt), no_update_times=no_update_times)
+    save_model(model, optimizer, lr_scheduler, scaler, epoch, syspath, ball_model_name, other="_{}".format(start_dt), no_update_times=no_update_times)
     pbar.set_description("AL:{:.2e} TL:{:.2e} KL{}:{:.2e} KL:{:.2e} lr:{:.2e} hs:{:.2e}".format(running_loss / (running_times if running_times > 0 else 1), test_loss / (test_times if test_times > 0 else 1), args.top_k, topk_loss, top_loss, optimizer.param_groups[0]['lr'], best_score))
     pbar.close()
     print()
