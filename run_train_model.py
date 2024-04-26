@@ -276,65 +276,66 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
             if time.time() - last_save_time > save_interval:
                 last_save_time = time.time()
                 save_model(model, optimizer, lr_scheduler, scaler, epoch, syspath, ball_model_name, no_update_times=no_update_times)
-            # run test
-            model.eval()
-            with torch.no_grad():
-                test_loss = 0.0
-                test_times = 0
-                topk_loss = 0.0
-                topk_times = 0
-                total_correct = 0.0
-                top_loss = 0.0
-                top_times = 0
-                tatal_correct = 0.0
-                for batch in test_dataloader:
-                    test_times += 1
-                    x, y = batch
-                    x = x.long().to(device)
-                    y = y.long().to(device)
-                    with autocast():
-                        y_pred = model(x).view(-1, m_args["model_args"]["{}_sequence_len".format(sub_name_eng)], m_args["model_args"]["{}_n_class".format(sub_name_eng)])
-                        # _, targets = torch.squeeze(y, 1).max(dim=1)
-                        tt_loss = criterion(y_pred.transpose(1,2), y.view(y.size(0), -1)) 
-                        # tt_loss = criterion(y_pred, torch.squeeze(y, 1))
-                    # test_loss += tt_loss.item() * x.size(0)
-                    test_loss += tt_loss.item()
-                    # calculate topk loss
-                    if args.name not in ["kl8"]:
-                        args.top_k = m_args["model_args"]["{}_sequence_len".format(sub_name_eng)]
-                    if args.model == "Transformer":
-                        probs, indices = torch.topk(y_pred, args.top_k, dim=1)
-                        for i in range(x.size(0)):
-                            topk_times += args.top_k
-                            target_indices = y[i].nonzero(as_tuple=False).squeeze()
-                            total_correct += sum([1 for j in indices[i] if j in target_indices])
-                        probs, indices = torch.topk(y_pred, m_args["model_args"]["{}_sequence_len".format(sub_name_eng)], dim=1)
-                        for i in range(x.size(0)):
-                            top_times += m_args["model_args"]["{}_sequence_len".format(sub_name_eng)]
-                            target_indices = y[i].nonzero(as_tuple=False).squeeze()
-                            tatal_correct += sum([1 for j in indices[i] if j in target_indices])
-                    elif args.model == "LSTM":
-                        for i in range(x.size(0)):
-                            softmax = nn.Softmax(dim=1)
-                            _ele = modeling.decode_one_hot(softmax(y_pred[i]), sort_by_max_value=True, num_classes=m_args["model_args"]["{}_n_class".format(sub_name_eng)])
-                            topk_times += args.top_k
-                            top_times += m_args["model_args"]["{}_sequence_len".format(sub_name_eng)]
-                            # target_indices = y[i].nonzero(as_tuple=False).squeeze()
-                            # target_indices = modeling.decode_one_hot(y[i], num_classes=m_args["model_args"]["{}_n_class".format(sub_name_eng)])
-                            target_indices = (y+1).view(y.size(0), -1).tolist()[i]
-                            total_correct += sum([1 for j in _ele[0:args.top_k] if j in target_indices])
-                            tatal_correct += sum([1 for j in _ele if j in target_indices])
-                # logger.info("Epoch {}/{} Test Loss: {:.2e}".format(epoch+1, model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)], test_loss / len(test_dataset)))
-            topk_loss = 1 - total_correct / (topk_times if topk_times > 0 else 1)
-            top_loss = 1 - tatal_correct / (top_times if top_times > 0 else 1)
-            if top_loss < best_score:
-                no_update_times = 0
-                best_score = top_loss
-                save_model(model, optimizer, lr_scheduler, scaler, epoch, syspath, ball_model_name, other="_{}_{}".format(start_dt, "best"), no_update_times=no_update_times)
-            if topk_loss < best_score:
-                no_update_times = 0
-                best_score = topk_loss
-                save_model(model, optimizer, lr_scheduler, scaler, epoch, syspath, ball_model_name, other="_{}_{}".format(start_dt, "best"), no_update_times=no_update_times)
+            if args.split_time != 0:
+                # run test
+                model.eval()
+                with torch.no_grad():
+                    test_loss = 0.0
+                    test_times = 0
+                    topk_loss = 0.0
+                    topk_times = 0
+                    total_correct = 0.0
+                    top_loss = 0.0
+                    top_times = 0
+                    tatal_correct = 0.0
+                    for batch in test_dataloader:
+                        test_times += 1
+                        x, y = batch
+                        x = x.long().to(device)
+                        y = y.long().to(device)
+                        with autocast():
+                            y_pred = model(x).view(-1, m_args["model_args"]["{}_sequence_len".format(sub_name_eng)], m_args["model_args"]["{}_n_class".format(sub_name_eng)])
+                            # _, targets = torch.squeeze(y, 1).max(dim=1)
+                            tt_loss = criterion(y_pred.transpose(1,2), y.view(y.size(0), -1)) 
+                            # tt_loss = criterion(y_pred, torch.squeeze(y, 1))
+                        # test_loss += tt_loss.item() * x.size(0)
+                        test_loss += tt_loss.item()
+                        # calculate topk loss
+                        if args.name not in ["kl8"]:
+                            args.top_k = m_args["model_args"]["{}_sequence_len".format(sub_name_eng)]
+                        if args.model == "Transformer":
+                            probs, indices = torch.topk(y_pred, args.top_k, dim=1)
+                            for i in range(x.size(0)):
+                                topk_times += args.top_k
+                                target_indices = y[i].nonzero(as_tuple=False).squeeze()
+                                total_correct += sum([1 for j in indices[i] if j in target_indices])
+                            probs, indices = torch.topk(y_pred, m_args["model_args"]["{}_sequence_len".format(sub_name_eng)], dim=1)
+                            for i in range(x.size(0)):
+                                top_times += m_args["model_args"]["{}_sequence_len".format(sub_name_eng)]
+                                target_indices = y[i].nonzero(as_tuple=False).squeeze()
+                                tatal_correct += sum([1 for j in indices[i] if j in target_indices])
+                        elif args.model == "LSTM":
+                            for i in range(x.size(0)):
+                                softmax = nn.Softmax(dim=1)
+                                _ele = modeling.decode_one_hot(softmax(y_pred[i]), sort_by_max_value=True, num_classes=m_args["model_args"]["{}_n_class".format(sub_name_eng)])
+                                topk_times += args.top_k
+                                top_times += m_args["model_args"]["{}_sequence_len".format(sub_name_eng)]
+                                # target_indices = y[i].nonzero(as_tuple=False).squeeze()
+                                # target_indices = modeling.decode_one_hot(y[i], num_classes=m_args["model_args"]["{}_n_class".format(sub_name_eng)])
+                                target_indices = (y+1).view(y.size(0), -1).tolist()[i]
+                                total_correct += sum([1 for j in _ele[0:args.top_k] if j in target_indices])
+                                tatal_correct += sum([1 for j in _ele if j in target_indices])
+                    # logger.info("Epoch {}/{} Test Loss: {:.2e}".format(epoch+1, model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)], test_loss / len(test_dataset)))
+                topk_loss = 1 - total_correct / (topk_times if topk_times > 0 else 1)
+                top_loss = 1 - tatal_correct / (top_times if top_times > 0 else 1)
+                if top_loss < best_score:
+                    no_update_times = 0
+                    best_score = top_loss
+                    save_model(model, optimizer, lr_scheduler, scaler, epoch, syspath, ball_model_name, other="_{}_{}".format(start_dt, "best"), no_update_times=no_update_times)
+                if topk_loss < best_score:
+                    no_update_times = 0
+                    best_score = topk_loss
+                    save_model(model, optimizer, lr_scheduler, scaler, epoch, syspath, ball_model_name, other="_{}_{}".format(start_dt, "best"), no_update_times=no_update_times)
         if args.tensorboard == 1:
             writer.add_scalar('Loss/Running', running_loss / (running_times if running_times > 0 else 1), epoch)
             if (epoch + 1) % save_epoch == 0:
