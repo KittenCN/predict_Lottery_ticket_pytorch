@@ -46,13 +46,10 @@ parser.add_argument('--ext_times', default=1000, type=int, help="ext_times")
 parser.add_argument('--init', default=0, type=int, help="init")
 parser.add_argument('--train_mode', default=0, type=int, help="0: mormal, 1: new trainning, 2: best trainning")
 parser.add_argument('--split_time', default=2021351, type=int, help="tranning data split time")
-parser.add_argument('--GPU', default=0, type=int, help="use GPU or not")
 args = parser.parse_args()
 
 warnings.filterwarnings('ignore')
 os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
-if args.GPU == 0:
-    os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 pred_key = {}
