@@ -344,15 +344,14 @@ def predict_ball_model(name, dataset, sequence_len, sub_name="红球", window_si
         _model = modeling.Transformer_Model
     elif model_name == "LSTM":
         _model = modeling.LSTM_Model
-    model = _model(input_size=input_size, output_size=output_size, hidden_size=hidden_size, num_layers=num_layers, num_heads=num_heads, dropout=0.5).to(device)
+    model = _model(input_size=input_size, output_size=output_size, hidden_size=hidden_size, num_layers=num_layers, num_heads=num_heads, dropout=0.5, num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)]).to(device)
     if os.path.exists("{}{}_ball_model_pytorch_{}.ckpt".format(syspath, sub_name_eng, model_name)):
         # model.load_state_dict(torch.load("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)))
         checkpoint = torch.load("{}{}_ball_model_pytorch_{}.ckpt".format(syspath, sub_name_eng, model_name))
-        if 'windows_size' in checkpoint and 'batch_size' in checkpoint and 'hidden_size' in checkpoint and 'num_layers' in checkpoint and 'num_heads' in checkpoint:
-            if checkpoint['windows_size'] != args.windows_size or checkpoint['batch_size'] != args.batch_size or checkpoint['hidden_size'] != args.hidden_size or checkpoint['num_layers'] != args.num_layers or checkpoint['num_heads'] != args.num_heads:
+        if 'windows_size' in checkpoint and 'hidden_size' in checkpoint and 'num_layers' in checkpoint and 'num_heads' in checkpoint:
+            if checkpoint['windows_size'] != args.windows_size or checkpoint['hidden_size'] != args.hidden_size or checkpoint['num_layers'] != args.num_layers or checkpoint['num_heads'] != args.num_heads:
                 logger.info("当前为预测模式，将自动调整训练参数！")
                 args.windows_size = checkpoint['windows_size']
-                args.batch_size = checkpoint['batch_size']
                 args.hidden_size = checkpoint['hidden_size']
                 args.num_layers = checkpoint['num_layers']
                 args.num_heads = checkpoint['num_heads']
@@ -364,9 +363,9 @@ def predict_ball_model(name, dataset, sequence_len, sub_name="红球", window_si
     model.eval()
     for batch in dataloader:
         x, y = batch
-        x = x.to(device)
-        y = y.to(device)
-        y_pred = model(x.float())
+        x = x.long().to(device)
+        y = y.long().to(device)
+        y_pred = model(x)
     return y_pred, name_list
 
 def run_predict(window_size, sequence_len, hidden_size=128, num_layers=8, num_heads=16, input_size=20, output_size=20, f_data=0, model="Transformer", args=None, device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu")):
@@ -380,7 +379,7 @@ def run_predict(window_size, sequence_len, hidden_size=128, num_layers=8, num_he
         # redpath = model_path + model_args[mini_args.name]["pathname"]['name'] + str(model_args[mini_args.name]["model_args"]["windows_size"]) + model_args[mini_args.name]["subpath"]['red']
         # bluepath = model_path + model_args[mini_args.name]["pathname"]['name'] + str(model_args[mini_args.name]["model_args"]["windows_size"]) + model_args[mini_args.name]["subpath"]['blue']
         # model = modeling.TransformerModel(input_size=20, output_size=20).to(device)
-        if os.path.exists("{}{}_ball_model_pytorch_{}.ckpt".format(syspath, sub_name_eng, model), map_location=device):
+        if os.path.exists("{}{}_ball_model_pytorch_{}.ckpt".format(syspath, sub_name_eng, model)):
             # model.load_state_dict(torch.load("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)))
             # logger.info("已加载{}模型！窗口大小:{}".format(sub_name, model_args[mini_args.name]["model_args"]["windows_size"]))
             current_number = get_current_number(mini_args.name)
@@ -390,7 +389,7 @@ def run_predict(window_size, sequence_len, hidden_size=128, num_layers=8, num_he
             y_pred, name_list = predict_ball_model(mini_args.name, data, sequence_len, sub_name, window_size,hidden_size=hidden_size, num_layers=num_layers, num_heads=num_heads, input_size=input_size, output_size=output_size, model_name=model, args=args)
             logger.info("预测{}结果为: \n".format(sub_name))
             if model == "Transformer":
-                y_pred_list = modeling.binary_decode_array(y_pred.cpu(), threshold=0.25, top_k=mini_args[mini_args.name]["model_args"]["red_n_class"])
+                y_pred_list = modeling.binary_decode_array(y_pred.cpu(), threshold=0.25, top_k=model_args[mini_args.name]["model_args"]["red_n_class"])
                 for row in y_pred_list:
                     row_limit = row[0:20]
                     logger.info("超过阈值的数据: {}".format(row))
@@ -398,9 +397,9 @@ def run_predict(window_size, sequence_len, hidden_size=128, num_layers=8, num_he
                     logger.info("排序后前K位超过阈值的数据: {}".format(sorted(row_limit)))
             elif model == "LSTM":
                 softmax = nn.Softmax(dim=1)
-                y_pred_list = modeling.decode_one_hot(softmax(y_pred).cpu(), sort_by_max_value=True, num_classes=mini_args[mini_args.name]["model_args"]["red_n_class"])
-                logger.info("超过阈值的数据: {}".format(y_pred_list))
-                logger.info("排序后超过阈值的数据: {}".format(sorted(y_pred_list)))
+                y_pred_list = modeling.decode_one_hot(softmax(y_pred), sort_by_max_value=True, num_classes=model_args[mini_args.name]["model_args"]["red_n_class"])
+                logger.info("超过阈值的数据: {}".format(set(y_pred_list)))
+                logger.info("排序后超过阈值的数据: {}".format(sorted(set(y_pred_list))))
         else:
             logger.warning("抱歉，没有找到{}模型！".format(sub_name))
             exit(0)
