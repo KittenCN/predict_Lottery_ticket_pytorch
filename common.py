@@ -42,7 +42,7 @@ class FocalLoss(nn.Module):
         F_loss = at * (1 - pt) ** self.gamma * BCE_loss
         return F_loss.mean()
 
-def create_train_data(name, windows, dataset=0, ball_type="red", cq=0, test_flag=0, test_begin=2021351, f_data=0, model="Transformer", num_classes=80, test_list=[]):
+def create_train_data(name, windows, dataset=0, ball_type="red", cq=0, test_flag=0, test_begin=0, f_data=0, model="Transformer", num_classes=80, test_list=[]):
     """ 创建训练数据
     :param name: 玩法，双色球/大乐透
     :param windows: 训练窗口
@@ -59,7 +59,7 @@ def create_train_data(name, windows, dataset=0, ball_type="red", cq=0, test_flag
     data = ori_data.copy()
     if test_begin >= 0 and len(test_list) <= 0:
         if f_data == 0:
-            if test_flag == 0:
+            if test_flag in [0, 2]:
                 data = data[data['期数'] > test_begin]
             else:
                 data = data[data['期数'] <= test_begin]
@@ -385,7 +385,7 @@ def run_predict(window_size, sequence_len, hidden_size=128, num_layers=8, num_he
             current_number = get_current_number(mini_args.name)
             logger.info("【{}】最近一期:{}".format(name_path[mini_args.name]["name"], current_number))
             logger.info("正在创建【{}】数据集...".format(name_path[mini_args.name]["name"]))
-            data = create_train_data(mini_args.name, model_args[mini_args.name]["model_args"]["windows_size"], 1, sub_name_eng, mini_args.cq,f_data=f_data, model=model)
+            data = create_train_data(mini_args.name, model_args[mini_args.name]["model_args"]["windows_size"], 1, sub_name_eng, mini_args.cq,f_data=f_data, model=model, test_flag=2)
             y_pred, name_list = predict_ball_model(mini_args.name, data, sequence_len, sub_name, window_size,hidden_size=hidden_size, num_layers=num_layers, num_heads=num_heads, input_size=input_size, output_size=output_size, model_name=model, args=args)
             logger.info("预测{}结果为: \n".format(sub_name))
             if model == "Transformer":

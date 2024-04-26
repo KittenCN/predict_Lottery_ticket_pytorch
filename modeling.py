@@ -242,26 +242,33 @@ class CustomSchedule(_LRScheduler):
 class MyDataset(Dataset):
     def __init__(self, data, windows, cut_num, model='Transformer', num_classes=80, test_flag=0, test_list=[]):
         tmp = []
+        if test_flag == 2:
+            windows = windows - 1
         for i in range(len(data) - windows):
             if cut_num > 0:
-                if len(test_list) <= 0 or (test_flag == 0 and data[i][1] not in test_list) or (test_flag == 1 and data[i][1] in test_list):
+                if test_flag == 2 or len(test_list) <= 0 or (test_flag == 0 and data[i][1] not in test_list) or (test_flag == 1 and data[i][1] in test_list):
                     sub_data = data[i:(i+windows+1), 2:cut_num+2]
                     tmp.append(sub_data.reshape(windows+1, cut_num))
             else:
-                if len(test_list) <= 0 or (test_flag == 0 and data[i][1] not in test_list) or (test_flag == 1 and data[i][1] in test_list):
+                if test_flag == 2 or len(test_list) <= 0 or (test_flag == 0 and data[i][1] not in test_list) or (test_flag == 1 and data[i][1] in test_list):
                     sub_data = data[i:(i+windows+1), cut_num*(-1):]
                     tmp.append(sub_data.reshape(windows+1, data.shape[1]-(cut_num*(-1))))
         self.data = np.array(tmp)
         self.model = model
         self.num_classes = num_classes
+        self.test_flag = test_flag
     
     def __len__(self):
         return len(self.data) - 1
     
     def __getitem__(self, idx):
         # 将每组数据分为输入序列和目标序列
-        x = torch.from_numpy(self.data[idx][1:][::-1].copy())
-        y = torch.from_numpy(self.data[idx][0].copy()).unsqueeze(0)
+        if self.test_flag != 2:
+            x = torch.from_numpy(self.data[idx][1:][::-1].copy())
+            y = torch.from_numpy(self.data[idx][0].copy()).unsqueeze(0)
+        else:
+            x = torch.from_numpy(self.data[idx][0:][::-1].copy())
+            y = torch.from_numpy(self.data[idx][0].copy()).unsqueeze(0)
         if self.model == 'Transformer':
             x_hot = binary_encode_array(x, self.num_classes) 
             y_hot = binary_encode_array(y, self.num_classes)
