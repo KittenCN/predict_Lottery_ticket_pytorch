@@ -212,10 +212,12 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
         args.split_time = split_time
         test_list = _test_list
         red_train_data = create_train_data(name=args.name, windows=model_args[name]["model_args"]["windows_size"], dataset=1, ball_type="red", cq=args.cq, test_flag=0, test_begin=args.split_time, f_data=0, model=args.model, num_classes=model_args[name]["model_args"]["red_n_class"], test_list=test_list)
-        red_test_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "red", args.cq, 1, args.split_time, model=args.model, num_classes=model_args[name]["model_args"]["red_n_class"], test_list=test_list)
+        if args.split_time != 0:
+            red_test_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "red", args.cq, 1, args.split_time, model=args.model, num_classes=model_args[name]["model_args"]["red_n_class"], test_list=test_list)
         if name not in ["kl8"]:
             blue_train_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "blue", args.cq, 0, args.split_time, model=args.model, num_classes=model_args[name]["model_args"]["blue_n_class"], test_list=test_list)
-            blue_test_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "blue", args.cq, 1, args.split_time, model=args.model, num_classes=model_args[name]["model_args"]["blue_n_class"], test_list=test_list)
+            if args.split_time != 0:
+                blue_test_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "blue", args.cq, 1, args.split_time, model=args.model, num_classes=model_args[name]["model_args"]["blue_n_class"], test_list=test_list)
         if sub_name_eng == "red":
             dataset = red_train_data
             test_dataset = red_test_data
@@ -373,10 +375,12 @@ def action(name):
                 test_list.append(int(ori_data[ori_data['Unnamed: 0'] == item]['期数']))
     # name, windows, dataset=0, ball_type="red", cq=0, test_flag=0, test_begin=2021351, f_data=0, model="Transformer"
     red_train_data = create_train_data(name=args.name, windows=model_args[name]["model_args"]["windows_size"], dataset=1, ball_type="red", cq=args.cq, test_flag=0, test_begin=args.split_time, f_data=0, model=args.model, num_classes=model_args[name]["model_args"]["red_n_class"], test_list=test_list)
-    red_test_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "red", args.cq, 1, args.split_time, model=args.model, num_classes=model_args[name]["model_args"]["red_n_class"], test_list=test_list)
+    if args.split_time != 0:
+        red_test_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "red", args.cq, 1, args.split_time, model=args.model, num_classes=model_args[name]["model_args"]["red_n_class"], test_list=test_list)
     if name not in ["kl8"]:
         blue_train_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "blue", args.cq, 0, args.split_time, model=args.model, num_classes=model_args[name]["model_args"]["blue_n_class"], test_list=test_list)
-        blue_test_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "blue", args.cq, 1, args.split_time, model=args.model, num_classes=model_args[name]["model_args"]["blue_n_class"], test_list=test_list)
+        if args.split_time != 0:
+            blue_test_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "blue", args.cq, 1, args.split_time, model=args.model, num_classes=model_args[name]["model_args"]["blue_n_class"], test_list=test_list)
     for i in range(args.epochs):
         if model_args[name]["model_args"]["red_epochs"] > 0:
             best_score = 999999999
