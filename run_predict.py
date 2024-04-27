@@ -17,6 +17,7 @@ parser.add_argument('--num_layers', default=6, type=int, help="num_layers")
 parser.add_argument('--num_heads', default=8, type=int, help="num_heads")
 parser.add_argument('--f_data', default=0, type=int, help="指定预测期数")
 parser.add_argument('--model', default='Transformer', type=str, help="model name")
+parser.add_argument('--test_mode', default=0, type=int, help="test_mode")
 args = parser.parse_args()
 
 if __name__ == '__main__':
@@ -45,5 +46,5 @@ if __name__ == '__main__':
         for size in list_windows_size:
             current_number = get_current_number(args.name)
             # run_predict(int(size), model_args[args.name]["model_args"]['red_sequence_len'], hidden_size=args.hidden_size, num_layers=args.num_layers, num_heads=args.num_heads, input_size=model_args[args.name]["model_args"]["red_n_class"]*int(size), output_size=model_args[args.name]["model_args"]["red_n_class"], f_data=args.f_data, model=args.model)
-            run_predict(int(size), model_args[args.name]["model_args"]['red_sequence_len'], hidden_size=args.hidden_size, num_layers=args.num_layers, num_heads=args.num_heads, input_size=model_args[args.name]["model_args"]["red_sequence_len"], output_size=model_args[args.name]["model_args"]["red_sequence_len"]*model_args[args.name]["model_args"]["red_n_class"], f_data=args.f_data, model=args.model, args=args)
+            run_predict(int(size), model_args[args.name]["model_args"]['red_sequence_len'], hidden_size=args.hidden_size, num_layers=args.num_layers, num_heads=args.num_heads, input_size=model_args[args.name]["model_args"]["red_sequence_len"], output_size=model_args[args.name]["model_args"]["red_sequence_len"]*model_args[args.name]["model_args"]["red_n_class"], f_data=args.f_data, model=args.model, args=args, test_mode=args.test_mode)
         

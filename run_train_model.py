@@ -284,10 +284,10 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
                     test_times = 0
                     topk_loss = 0.0
                     topk_times = 0
-                    total_correct = 0.0
+                    totalK_correct = 0.0
                     top_loss = 0.0
                     top_times = 0
-                    tatal_correct = 0.0
+                    total_correct = 0.0
                     for batch in test_dataloader:
                         test_times += 1
                         x, y = batch
@@ -308,12 +308,12 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
                             for i in range(x.size(0)):
                                 topk_times += args.top_k
                                 target_indices = y[i].nonzero(as_tuple=False).squeeze()
-                                total_correct += sum([1 for j in indices[i] if j in target_indices])
+                                totalK_correct += sum([1 for j in indices[i] if j in target_indices])
                             probs, indices = torch.topk(y_pred, m_args["model_args"]["{}_sequence_len".format(sub_name_eng)], dim=1)
                             for i in range(x.size(0)):
                                 top_times += m_args["model_args"]["{}_sequence_len".format(sub_name_eng)]
                                 target_indices = y[i].nonzero(as_tuple=False).squeeze()
-                                tatal_correct += sum([1 for j in indices[i] if j in target_indices])
+                                total_correct += sum([1 for j in indices[i] if j in target_indices])
                         elif args.model == "LSTM":
                             for i in range(x.size(0)):
                                 softmax = nn.Softmax(dim=1)
@@ -323,11 +323,16 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
                                 # target_indices = y[i].nonzero(as_tuple=False).squeeze()
                                 # target_indices = modeling.decode_one_hot(y[i], num_classes=m_args["model_args"]["{}_n_class".format(sub_name_eng)])
                                 target_indices = (y+1).view(y.size(0), -1).tolist()[i]
-                                total_correct += sum([1 for j in _ele[0:args.top_k] if j in target_indices])
-                                tatal_correct += sum([1 for j in _ele if j in target_indices])
+                                target_indices_set = set(target_indices)
+                                _eleK_set = set(_ele[0:args.top_k])
+                                _ele_set = set(_ele)
+                                totalK_correct += len(target_indices_set & _eleK_set)
+                                total_correct += len(target_indices_set & _ele_set)
+                                # totalK_correct += sum([1 for j in _ele[0:args.top_k] if j in target_indices])
+                                # total_correct += sum([1 for j in _ele if j in target_indices])
                     # logger.info("Epoch {}/{} Test Loss: {:.2e}".format(epoch+1, model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)], test_loss / len(test_dataset)))
-                topk_loss = 1 - total_correct / (topk_times if topk_times > 0 else 1)
-                top_loss = 1 - tatal_correct / (top_times if top_times > 0 else 1)
+                topk_loss = 1 - totalK_correct / (topk_times if topk_times > 0 else 1)
+                top_loss = 1 - total_correct / (top_times if top_times > 0 else 1)
                 if top_loss < best_score:
                     no_update_times = 0
                     best_score = top_loss

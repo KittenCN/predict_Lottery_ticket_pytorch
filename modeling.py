@@ -240,9 +240,9 @@ class CustomSchedule(_LRScheduler):
 
 # 定义数据集类
 class MyDataset(Dataset):
-    def __init__(self, data, windows, cut_num, model='Transformer', num_classes=80, test_flag=0, test_list=[]):
+    def __init__(self, data, windows, cut_num, model='Transformer', num_classes=80, test_flag=0, test_list=[], f_data=0):
         tmp = []
-        if test_flag == 2:
+        if test_flag == 2 and f_data == 0:
             windows = windows - 1
         for i in range(len(data) - windows):
             if cut_num > 0:
@@ -257,13 +257,14 @@ class MyDataset(Dataset):
         self.model = model
         self.num_classes = num_classes
         self.test_flag = test_flag
+        self.f_data = f_data
     
     def __len__(self):
         return len(self.data) - 1
     
     def __getitem__(self, idx):
         # 将每组数据分为输入序列和目标序列
-        if self.test_flag != 2:
+        if self.test_flag != 2 or self.f_data != 0:
             x = torch.from_numpy(self.data[idx][1:][::-1].copy())
             y = torch.from_numpy(self.data[idx][0].copy()).unsqueeze(0)
         else:

@@ -106,9 +106,9 @@ def create_train_data(name, windows, dataset=0, ball_type="red", cq=0, test_flag
         }
     else:
         if ball_type == "red":
-            dataset = modeling.MyDataset(data, windows, cut_num, model, num_classes, test_flag, test_list)
+            dataset = modeling.MyDataset(data, windows, cut_num, model, num_classes, test_flag, test_list, f_data)
         else:
-            dataset = modeling.MyDataset(data, windows, cut_num * -1, model, num_classes, test_flag, test_list)
+            dataset = modeling.MyDataset(data, windows, cut_num * -1, model, num_classes, test_flag, test_list, f_data)
         logger.info(strball + strflag + "集数据维度: {}".format(dataset.data.shape))
         return dataset
 
@@ -366,9 +366,9 @@ def predict_ball_model(name, dataset, sequence_len, sub_name="红球", window_si
         x = x.long().to(device)
         y = y.long().to(device)
         y_pred = model(x)
-    return y_pred, name_list
+    return y_pred, name_list, y
 
-def run_predict(window_size, sequence_len, hidden_size=128, num_layers=8, num_heads=16, input_size=20, output_size=20, f_data=0, model="Transformer", args=None, device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu")):
+def run_predict(window_size, sequence_len, hidden_size=128, num_layers=8, num_heads=16, input_size=20, output_size=20, f_data=0, model="Transformer", args=None, test_mode=0):
     global pred_key_d
     balls = ['red', 'blue'] if mini_args.name not in ["pls", "kl8"] else ['red']
     for sub_name_eng in balls:
@@ -386,20 +386,40 @@ def run_predict(window_size, sequence_len, hidden_size=128, num_layers=8, num_he
             logger.info("【{}】最近一期:{}".format(name_path[mini_args.name]["name"], current_number))
             logger.info("正在创建【{}】数据集...".format(name_path[mini_args.name]["name"]))
             data = create_train_data(mini_args.name, model_args[mini_args.name]["model_args"]["windows_size"], 1, sub_name_eng, mini_args.cq,f_data=f_data, model=model, test_flag=2)
-            y_pred, name_list = predict_ball_model(mini_args.name, data, sequence_len, sub_name, window_size,hidden_size=hidden_size, num_layers=num_layers, num_heads=num_heads, input_size=input_size, output_size=output_size, model_name=model, args=args)
-            logger.info("预测{}结果为: \n".format(sub_name))
+            y_pred, name_list, y_target = predict_ball_model(mini_args.name, data, sequence_len, sub_name, window_size,hidden_size=hidden_size, num_layers=num_layers, num_heads=num_heads, input_size=input_size, output_size=output_size, model_name=model, args=args)
+            if test_mode == 0 or f_data == 0:
+                logger.info("预测{}结果为: \n".format(sub_name))
+            else:
+                logger.info("测试{}结果为: ".format(sub_name))
+            correct_nums = 0
+            total_nums = 0
             if model == "Transformer":
-                y_pred_list = modeling.binary_decode_array(y_pred.cpu(), threshold=0.25, top_k=model_args[mini_args.name]["model_args"]["red_n_class"])
+                y_pred_list = modeling.binary_decode_array(y_pred, threshold=0.25, top_k=model_args[mini_args.name]["model_args"]["{}_n_class".format(sub_name_eng)])
                 for row in y_pred_list:
-                    row_limit = row[0:20]
-                    logger.info("超过阈值的数据: {}".format(row))
-                    logger.info("前K位超过阈值的数据: {}".format(row_limit))
-                    logger.info("排序后前K位超过阈值的数据: {}".format(sorted(row_limit)))
+                    row_limit = row[0:model_args[mini_args.name]["model_args"]["{}_n_class".format(sub_name_eng)]]
+                    if test_mode == 0 or f_data == 0:
+                        logger.info("超过阈值的数据: {}".format(row))
+                        logger.info("前K位超过阈值的数据: {}".format(row_limit))
+                        logger.info("排序后前K位超过阈值的数据: {}".format(sorted(row_limit)))
+                    else:
+                        row_limit = list(dict.fromkeys(row_limit))
+                        row_limit_set = set(row_limit)
+                        y_target_set = set((y_target+1).view(y_target.size(0), -1).tolist()[0])
+                        total_nums += len(list(dict.fromkeys(y_target.tolist()[0][0])))
+                        correct_nums += len(row_limit_set & y_target_set)
             elif model == "LSTM":
                 softmax = nn.Softmax(dim=1)
-                y_pred_list = modeling.decode_one_hot(softmax(y_pred), sort_by_max_value=True, num_classes=model_args[mini_args.name]["model_args"]["red_n_class"])
-                logger.info("超过阈值的数据: {}".format(set(y_pred_list)))
-                logger.info("排序后超过阈值的数据: {}".format(sorted(set(y_pred_list))))
+                y_pred_list = modeling.decode_one_hot(softmax(y_pred), sort_by_max_value=True, num_classes=model_args[mini_args.name]["model_args"]["{}_n_class".format(sub_name_eng)])
+                if test_mode == 0 or f_data == 0:
+                    logger.info("超过阈值的数据: {}".format(list(dict.fromkeys(y_pred_list))))
+                    logger.info("排序后超过阈值的数据: {}".format(sorted(list(dict.fromkeys(y_pred_list)))))
+                else:
+                    y_target_set = set((y_target+1).view(y_target.size(0), -1).tolist()[0])
+                    y_pred_set = set(list(dict.fromkeys(y_pred_list)))
+                    total_nums += len(list(dict.fromkeys(y_target.tolist()[0][0])))
+                    correct_nums += len(y_pred_set & y_target_set)
+            if test_mode != 0 and f_data > 0:
+                logger.info("预测{}结果为: {:.2f}%".format(sub_name, correct_nums / (total_nums if total_nums > 0 else 1) * 100))
         else:
             logger.warning("抱歉，没有找到{}模型！".format(sub_name))
             exit(0)
