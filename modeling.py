@@ -382,11 +382,11 @@ class MyDataset(Dataset):
     def __getitem__(self, idx):
         # 将每组数据分为输入序列和目标序列
         if self.test_flag != 2 or self.f_data != 0:
-            x = torch.from_numpy(self.data[idx][1:][::-1].copy())
-            y = torch.from_numpy(self.data[idx][0].copy()[:self.cut_num]).unsqueeze(0)
+            x = torch.from_numpy(self.data[idx][1:][::-1].copy().astype(np.float32))
+            y = torch.from_numpy(self.data[idx][0].copy().astype(np.float32)[:self.cut_num]).unsqueeze(0)
         else:
-            x = torch.from_numpy(self.data[idx][0:][::-1].copy())
-            y = torch.from_numpy(self.data[idx][0].copy()[:self.cut_num]).unsqueeze(0)
+            x = torch.from_numpy(self.data[idx][0:][::-1].copy().astype(np.float32))
+            y = torch.from_numpy(self.data[idx][0].copy().astype(np.float32)[:self.cut_num]).unsqueeze(0)
         if self.model == 'Transformer':
             x_hot = binary_encode_array(x, self.num_classes) 
             y_hot = binary_encode_array(y, self.num_classes)
