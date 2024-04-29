@@ -10,6 +10,8 @@ import numpy as np
 import torch.nn.functional as F
 from torch.utils.data import  Dataset
 from torch.optim.lr_scheduler import _LRScheduler
+from itertools import combinations
+from scipy.stats import linregress
 
 def binary_encode_array(input_array, num_classes=80):
     """
@@ -179,22 +181,28 @@ class LSTM_Model(nn.Module):
     def __init__(self, input_size, output_size=20, hidden_size=512, num_layers=1, num_heads=16, dropout=0.1, num_embeddings=20, embedding_dim=50):
         super(LSTM_Model, self).__init__()
         self.embedding = nn.Embedding(num_embeddings + 1, embedding_dim)
-        self.conv1d = nn.Conv1d(in_channels=input_size, out_channels=embedding_dim*input_size, kernel_size=3, padding=1)
-        self.lstm = nn.LSTM(embedding_dim*input_size, hidden_size, num_layers, dropout=dropout, batch_first=True)
+        self.conv1d = nn.Conv1d(in_channels=20, out_channels=embedding_dim*20, kernel_size=3, padding=1)
+        self.conv1d2 = nn.Conv1d(in_channels=5, out_channels=250, kernel_size=3)
+        self.lstm = nn.LSTM(embedding_dim*20+28, hidden_size, num_layers, dropout=dropout, batch_first=True)
         self.dropout = nn.Dropout(dropout)
         self.attention = nn.Linear(hidden_size, 1)
         self.linear = nn.Linear(hidden_size, output_size)
+        self.input_size = input_size
 
     def forward(self, x):
         # LSTM 层
         # x = x.view(x.size(0), x.size(1), -1)
         # x: [batch_size, seq_length, num_indices]
-        x = self.embedding(x)  # [batch_size, seq_length, num_indices, embedding_dim]
-        x = x.permute(0, 2, 1, 3).contiguous()  # [batch_size, num_indices, seq_length, embedding_dim]
-        x = x.view(x.size(0), x.size(1), -1)  # [batch_size, num_indices, seq_length*embedding_dim]
-        x = self.conv1d(x)  # [batch_size, num_channels, seq_length]
-        x = x.permute(0, 2, 1)  # [batch_size, seq_length, num_channels]
-        lstm_out, _ = self.lstm(x)  # (batch_size, seq_len, input_size)
+        indices = x[:, :, :20].long()
+        features = x[:, :, 20:].float()
+        indices = self.embedding(indices)  # [batch_size, seq_length, num_indices, embedding_dim]
+        indices = indices.permute(0, 2, 1, 3).contiguous()  # [batch_size, num_indices, seq_length, embedding_dim]
+        indices = indices.view(indices.size(0), indices.size(1), -1)  # [batch_size, num_indices, seq_length*embedding_dim]
+        indices = self.conv1d(indices)  # [batch_size, num_channels, seq_length]
+        indices = indices.permute(0, 2, 1)  # [batch_size, seq_length, num_channels]
+        features = self.conv1d2(features)  # [batch_size, seq_length, num_channels]
+        combined = torch.cat([indices, features], dim=-1)
+        lstm_out, _ = self.lstm(combined)  # (batch_size, seq_len, input_size)
         lstm_out = self.dropout(lstm_out)
         # Applying attention
         attention_weights = F.softmax(self.attention(lstm_out), dim=1)
@@ -248,7 +256,30 @@ class MyDataset(Dataset):
             if cut_num > 0:
                 if test_flag == 2 or len(test_list) <= 0 or (test_flag == 0 and data[i][1] not in test_list) or (test_flag == 1 and data[i][1] in test_list):
                     sub_data = data[i:(i+windows+1), 2:cut_num+2]
-                    tmp.append(sub_data.reshape(windows+1, cut_num))
+                    sub_data = sub_data.reshape(windows+1, -1)
+                    temp_item = []
+                    for item in sub_data:
+                        _tmp = []
+                        item = item - 1
+                        if i < windows:
+                            _feuture = ([0.0] * windows * sub_data.shape[0])
+                            features = np.hstack((_feuture))
+                            _tmp = np.concatenate((item, features))
+                        else:
+                            _item = data[i-windows:i+1, 2:cut_num+2] - 1
+                            _item = _item.reshape(windows+1,cut_num)
+                            onsecutive_features = self.calculate_consecutive_features(_item)
+                            interval_features = self.calculate_interval_features(_item)
+                            # trend_features = self.calculate_trend_features(_item)
+                            # frequency = list(self.calculate_frequency(_item).values())
+                            odd_even_ratio, high_low_ratio = self.calculate_odd_even_and_high_low_ratios(_item)
+                            # cnt_combinations = self.count_combinations(_item)
+                            prime_composite_ratio = self.calculate_prime_composite_ratio(_item)
+                            features = np.hstack((onsecutive_features, interval_features,  \
+                                                  odd_even_ratio, high_low_ratio, prime_composite_ratio))
+                            _tmp = np.concatenate((item, features))
+                        temp_item.append(_tmp)
+                    tmp.append(temp_item)
             else:
                 if test_flag == 2 or len(test_list) <= 0 or (test_flag == 0 and data[i][1] not in test_list) or (test_flag == 1 and data[i][1] in test_list):
                     sub_data = data[i:(i+windows+1), cut_num*(-1):]
@@ -258,26 +289,123 @@ class MyDataset(Dataset):
         self.num_classes = num_classes
         self.test_flag = test_flag
         self.f_data = f_data
+        self.cut_num = cut_num
     
     def __len__(self):
         return len(self.data) - 1
-    
+
+    def is_prime(self, n):
+        """ Returns True if n is a prime number, else False """
+        if n <= 1:
+            return False
+        if n <= 3:
+            return True
+        if n % 2 == 0 or n % 3 == 0:
+            return False
+        i = 5
+        while i * i <= n:
+            if n % i == 0 or n % (i + 2) == 0:
+                return False
+            i += 6
+        return True
+
+    def calculate_prime_composite_ratio(self, numbers):
+        ratio_list = []
+        for row in numbers:
+            prime_count = sum(1 for num in row if self.is_prime(num))
+            composite_count = sum(1 for num in row if not self.is_prime(num) and num > 1)  # 排除1，因为1不是质数也不是合数
+            total_count = prime_count + composite_count
+            if total_count == 0:
+                ratio = 0  # 避免除以零
+            else:
+                ratio = prime_count / total_count
+            ratio_list.append(ratio)
+        return ratio_list
+
+
+    def calculate_consecutive_features(self, numbers):
+        consecutive_counts = []
+        for row in numbers:
+            count = 0
+            for i in range(len(row) - 1):
+                if row[i+1] == row[i] + 1:
+                    count += 1
+            consecutive_counts.append(count)
+        return consecutive_counts
+
+    def calculate_interval_features(self, numbers):
+        interval_averages = []
+        for row in numbers:
+            intervals = [row[i+1] - row[i] for i in range(len(row) - 1)]
+            interval_averages.append(sum(intervals) / len(intervals) if intervals else 0)
+        return interval_averages
+
+    def calculate_trend_features(self, numbers):
+        trends = []
+        for num in range(1, 81):  # 假设数字范围是 1 到 80
+            indices = [i for i, row in enumerate(numbers) if num in row]
+            if len(indices) > 1:
+                slope, _, _, _, _ = linregress(indices, [1]*len(indices))
+                trends.append(slope)
+            else:
+                trends.append(0)  # 若数字仅出现一次或不出现，趋势为0
+        return trends
+
+    def calculate_frequency(self, numbers):
+        frequency = {i: 0 for i in range(1, 81)}
+        for row in numbers:
+            for num in row:
+                frequency[num] += 1
+        return frequency
+
+    def calculate_odd_even_and_high_low_ratios(self, numbers):
+        odd_even_ratio = []
+        high_low_ratio = []
+        for row in numbers:
+            odd_count = sum(1 for num in row if num % 2 != 0)
+            even_count = sum(1 for num in row if num % 2 == 0)
+            high_count = sum(1 for num in row if num > 40)
+            low_count = sum(1 for num in row if num <= 40)
+            odd_even_ratio.append(odd_count / even_count if even_count != 0 else 0)
+            high_low_ratio.append(high_count / low_count if low_count != 0 else 0)
+        return odd_even_ratio, high_low_ratio
+
+    def count_combinations(self, numbers, top_k=10):
+        combo_counts = {}
+        for row in numbers:
+            for combo in combinations(sorted(row), 2):  # 使用2个数字的组合
+                combo_counts[combo] = combo_counts.get(combo, 0) + 1
+        # 返回出现频率最高的前k个组合
+        return sorted(combo_counts.items(), key=lambda item: item[1], reverse=True)[:top_k]
+
+
     def __getitem__(self, idx):
         # 将每组数据分为输入序列和目标序列
         if self.test_flag != 2 or self.f_data != 0:
             x = torch.from_numpy(self.data[idx][1:][::-1].copy())
-            y = torch.from_numpy(self.data[idx][0].copy()).unsqueeze(0)
+            y = torch.from_numpy(self.data[idx][0].copy()[:self.cut_num]).unsqueeze(0)
         else:
             x = torch.from_numpy(self.data[idx][0:][::-1].copy())
-            y = torch.from_numpy(self.data[idx][0].copy()).unsqueeze(0)
+            y = torch.from_numpy(self.data[idx][0].copy()[:self.cut_num]).unsqueeze(0)
         if self.model == 'Transformer':
             x_hot = binary_encode_array(x, self.num_classes) 
             y_hot = binary_encode_array(y, self.num_classes)
         elif self.model == 'LSTM':
             # x_hot = one_hot_encode_array(x, self.num_classes)
             # y_hot = one_hot_encode_array(y, self.num_classes)
-            x_hot = x - 1
-            y_hot = y - 1
+            x_hot = x
+            y_hot = y
+            # for item in x:
+            #     _item = []
+            #     item = item.tolist()
+            #     onsecutive_features = self.calculate_consecutive_features(item)
+            #     interval_features = self.calculate_interval_features(item)
+            #     trend_features = self.calculate_trend_features(item)
+            #     frequency = self.calculate_frequency(item)
+            #     odd_even_ratio, high_low_ratio = self.calculate_odd_even_and_high_low_ratios(item)
+            #     cnt_combinations = self.count_combinations(item)
+            #     features = np.hstack((onsecutive_features, interval_features, trend_features, list(frequency.values()), odd_even_ratio, high_low_ratio, cnt_combinations))
+            #     _item.append((_item, features))
         return x_hot, y_hot
 
 # 定义 Transformer 模型类 (废除不用)

@@ -122,7 +122,7 @@ def load_model(m_args, syspath, sub_name_eng, model, optimizer, lr_scheduler, sc
                     if args.model == "Transformer":
                         model = _model(input_size=m_args["model_args"]["{}_n_class".format(sub_name_eng)]*m_args["model_args"]["windows_size"], output_size=m_args["model_args"]["{}_n_class".format(sub_name_eng)], hidden_size=args.hidden_size, num_layers=args.num_layers, num_heads=args.num_heads, dropout=0.5).to(device)
                     elif args.model == "LSTM":
-                        model = _model(input_size=m_args["model_args"]["{}_sequence_len".format(sub_name_eng)], output_size=m_args["model_args"]["{}_sequence_len".format(sub_name_eng)]*m_args["model_args"]["{}_n_class".format(sub_name_eng)], hidden_size=args.hidden_size, num_layers=args.num_layers, num_heads=args.num_heads, dropout=0.5, num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)], embedding_dim=50).to(device)
+                        model = _model(input_size=m_args["model_args"]["{}_sequence_len".format(sub_name_eng)] + 30, output_size=m_args["model_args"]["{}_sequence_len".format(sub_name_eng)]*m_args["model_args"]["{}_n_class".format(sub_name_eng)], hidden_size=args.hidden_size, num_layers=args.num_layers, num_heads=args.num_heads, dropout=0.5, num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)], embedding_dim=50).to(device)
                     optimizer = optim.Adam(model.parameters(), lr=args.lr)
                     lr_scheduler = modeling.CustomSchedule(optimizer=optimizer, d_model=args.hidden_size, warmup_steps=model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]*0.2)
                 else:
@@ -177,7 +177,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     if args.model == "Transformer":
         model = _model(input_size=m_args["model_args"]["{}_n_class".format(sub_name_eng)]*m_args["model_args"]["windows_size"], output_size=m_args["model_args"]["{}_n_class".format(sub_name_eng)], hidden_size=args.hidden_size, num_layers=args.num_layers, num_heads=args.num_heads, dropout=0.5).to(device)
     elif args.model == "LSTM":
-        model = _model(input_size=m_args["model_args"]["{}_sequence_len".format(sub_name_eng)], output_size=m_args["model_args"]["{}_sequence_len".format(sub_name_eng)]*m_args["model_args"]["{}_n_class".format(sub_name_eng)], hidden_size=args.hidden_size, num_layers=args.num_layers, num_heads=args.num_heads, dropout=0.5, num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)], embedding_dim=50).to(device)
+        model = _model(input_size=m_args["model_args"]["{}_sequence_len".format(sub_name_eng)] + 30, output_size=m_args["model_args"]["{}_sequence_len".format(sub_name_eng)]*m_args["model_args"]["{}_n_class".format(sub_name_eng)], hidden_size=args.hidden_size, num_layers=args.num_layers, num_heads=args.num_heads, dropout=0.5, num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)], embedding_dim=50).to(device)
     # criterion = nn.MSELoss()
     # criterion = nn.BCEWithLogitsLoss() # 二分类交叉熵
     # criterion = nn.BCELoss() # 二分类交叉熵
@@ -256,12 +256,12 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
             model.train()
             running_times += 1
             x, y = batch
-            x = x.long().to(device)
-            y = y.long().to(device)
+            x = x.float().to(device)
+            y = y.float().to(device)
             optimizer.zero_grad()
             with autocast():
                 y_pred = model(x).view(-1, m_args["model_args"]["{}_sequence_len".format(sub_name_eng)], m_args["model_args"]["{}_n_class".format(sub_name_eng)])
-                t_loss = criterion(y_pred.transpose(1,2), y.view(y.size(0), -1))
+                t_loss = criterion(y_pred.transpose(1,2), y.long().view(y.size(0), -1))
             scaler.scale(t_loss).backward()
             scaler.step(optimizer)
             scaler.update()
@@ -291,12 +291,12 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
                     for batch in test_dataloader:
                         test_times += 1
                         x, y = batch
-                        x = x.long().to(device)
-                        y = y.long().to(device)
+                        x = x.float().to(device)
+                        y = y.float().to(device)
                         with autocast():
                             y_pred = model(x).view(-1, m_args["model_args"]["{}_sequence_len".format(sub_name_eng)], m_args["model_args"]["{}_n_class".format(sub_name_eng)])
                             # _, targets = torch.squeeze(y, 1).max(dim=1)
-                            tt_loss = criterion(y_pred.transpose(1,2), y.view(y.size(0), -1)) 
+                            tt_loss = criterion(y_pred.transpose(1,2), y.long().view(y.size(0), -1)) 
                             # tt_loss = criterion(y_pred, torch.squeeze(y, 1))
                         # test_loss += tt_loss.item() * x.size(0)
                         test_loss += tt_loss.item()
