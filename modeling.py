@@ -178,12 +178,12 @@ class Transformer_Model(nn.Module):
         return linear_out
     
 class LSTM_Model(nn.Module): 
-    def __init__(self, input_size, output_size=20, hidden_size=512, num_layers=1, num_heads=16, dropout=0.1, num_embeddings=20, embedding_dim=50):
+    def __init__(self, input_size, output_size=20, hidden_size=512, num_layers=1, num_heads=16, dropout=0.1, num_embeddings=20, embedding_dim=50, windows_size=30):
         super(LSTM_Model, self).__init__()
         self.embedding = nn.Embedding(num_embeddings + 1, embedding_dim)
         self.conv1d = nn.Conv1d(in_channels=20, out_channels=embedding_dim*20, kernel_size=3, padding=1)
-        self.conv1d2 = nn.Conv1d(in_channels=5, out_channels=250, kernel_size=3)
-        self.lstm = nn.LSTM(embedding_dim*20+28, hidden_size, num_layers, dropout=dropout, batch_first=True)
+        self.conv1d2 = nn.Conv1d(in_channels=int(windows_size), out_channels=embedding_dim*int(windows_size), kernel_size=3)
+        self.lstm = nn.LSTM(1153, hidden_size, num_layers, dropout=dropout, batch_first=True)
         self.dropout = nn.Dropout(dropout)
         self.attention = nn.Linear(hidden_size, 1)
         self.linear = nn.Linear(hidden_size, output_size)
@@ -262,9 +262,13 @@ class MyDataset(Dataset):
                         _tmp = []
                         item = item - 1
                         if i < windows:
-                            _feuture = ([0.0] * windows * sub_data.shape[0])
-                            features = np.hstack((_feuture))
-                            _tmp = np.concatenate((item, features))
+                            onsecutive_features = [0.0] * (windows + 1)
+                            interval_features = [0.0] * (windows + 1)
+                            # trend_features = self.calculate_trend_features(_item)
+                            # frequency = list(self.calculate_frequency(_item).values())
+                            odd_even_ratio, high_low_ratio = ([0.0] * (windows + 1), [0.0] * (windows + 1))
+                            # cnt_combinations = self.count_combinations(_item)
+                            prime_composite_ratio = [0.0] * (windows + 1)
                         else:
                             _item = data[i-windows:i+1, 2:cut_num+2] - 1
                             _item = _item.reshape(windows+1,cut_num)
@@ -275,9 +279,9 @@ class MyDataset(Dataset):
                             odd_even_ratio, high_low_ratio = self.calculate_odd_even_and_high_low_ratios(_item)
                             # cnt_combinations = self.count_combinations(_item)
                             prime_composite_ratio = self.calculate_prime_composite_ratio(_item)
-                            features = np.hstack((onsecutive_features, interval_features,  \
-                                                  odd_even_ratio, high_low_ratio, prime_composite_ratio))
-                            _tmp = np.concatenate((item, features))
+                        features = np.hstack((onsecutive_features, interval_features,  \
+                                                odd_even_ratio, high_low_ratio, prime_composite_ratio))
+                        _tmp = np.concatenate((item, features))
                         temp_item.append(_tmp)
                     tmp.append(temp_item)
             else:
@@ -382,11 +386,11 @@ class MyDataset(Dataset):
     def __getitem__(self, idx):
         # 将每组数据分为输入序列和目标序列
         if self.test_flag != 2 or self.f_data != 0:
-            x = torch.from_numpy(self.data[idx][1:][::-1].copy().astype(np.float32))
-            y = torch.from_numpy(self.data[idx][0].copy().astype(np.float32)[:self.cut_num]).unsqueeze(0)
+            x = torch.from_numpy(self.data[idx][1:][::-1].copy())
+            y = torch.from_numpy(self.data[idx][0].copy()[:self.cut_num]).unsqueeze(0)
         else:
-            x = torch.from_numpy(self.data[idx][0:][::-1].copy().astype(np.float32))
-            y = torch.from_numpy(self.data[idx][0].copy().astype(np.float32)[:self.cut_num]).unsqueeze(0)
+            x = torch.from_numpy(self.data[idx][0:][::-1].copy())
+            y = torch.from_numpy(self.data[idx][0].copy()[:self.cut_num]).unsqueeze(0)
         if self.model == 'Transformer':
             x_hot = binary_encode_array(x, self.num_classes) 
             y_hot = binary_encode_array(y, self.num_classes)
