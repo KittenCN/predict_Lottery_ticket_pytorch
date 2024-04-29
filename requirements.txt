@@ -9,6 +9,7 @@ loguru
 grpcio
 protobuf
 prefetch_generator
+scipy
 # for intel cpu
 intel_numpy
 mkl
