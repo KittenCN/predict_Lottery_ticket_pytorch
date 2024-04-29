@@ -181,9 +181,9 @@ class LSTM_Model(nn.Module):
     def __init__(self, input_size, output_size=20, hidden_size=512, num_layers=1, num_heads=16, dropout=0.1, num_embeddings=20, embedding_dim=50, windows_size=30):
         super(LSTM_Model, self).__init__()
         self.embedding = nn.Embedding(num_embeddings + 1, embedding_dim)
-        self.conv1d = nn.Conv1d(in_channels=20, out_channels=embedding_dim*20, kernel_size=3, padding=1)
-        self.conv1d2 = nn.Conv1d(in_channels=int(windows_size), out_channels=embedding_dim*int(windows_size), kernel_size=3)
-        self.lstm = nn.LSTM(1153, hidden_size, num_layers, dropout=dropout, batch_first=True)
+        self.conv1d = nn.Conv1d(in_channels=input_size, out_channels=embedding_dim*input_size, kernel_size=3, padding=1)
+        self.conv1d2 = nn.Conv1d(in_channels=(windows_size+1)*5, out_channels=embedding_dim*windows_size, kernel_size=3)
+        self.lstm = nn.LSTM(embedding_dim*input_size+(windows_size-2), hidden_size, num_layers, dropout=dropout, batch_first=True) #embedding_dim*20+(input_size-2)
         self.dropout = nn.Dropout(dropout)
         self.attention = nn.Linear(hidden_size, 1)
         self.linear = nn.Linear(hidden_size, output_size)
@@ -195,14 +195,16 @@ class LSTM_Model(nn.Module):
         # x: [batch_size, seq_length, num_indices]
         indices = x[:, :, :20].long()
         features = x[:, :, 20:].float()
-        indices = self.embedding(indices)  # [batch_size, seq_length, num_indices, embedding_dim]
-        indices = indices.permute(0, 2, 1, 3).contiguous()  # [batch_size, num_indices, seq_length, embedding_dim]
-        indices = indices.view(indices.size(0), indices.size(1), -1)  # [batch_size, num_indices, seq_length*embedding_dim]
-        indices = self.conv1d(indices)  # [batch_size, num_channels, seq_length]
-        indices = indices.permute(0, 2, 1)  # [batch_size, seq_length, num_channels]
-        features = self.conv1d2(features)  # [batch_size, seq_length, num_channels]
+        indices = self.embedding(indices)  # [batch_size, seq_length, num_indices] -> [batch_size, seq_length, num_indices, embedding_dim]
+        indices = indices.permute(0, 2, 1, 3).contiguous() # [batch_size, seq_length, num_indices, embedding_dim] -> [batch_size, num_indices, seq_length, embedding_dim]
+        indices = indices.view(indices.size(0), indices.size(1), -1)  # [batch_size, num_indices, seq_length, embedding_dim] -> [batch_size, num_indices, seq_length*embedding_dim]
+        indices = self.conv1d(indices)  # [batch_size, num_indices, seq_length*embedding_dim] -> [batch_size, num_indices, seq_length*embedding_dim]
+        indices = indices.permute(0, 2, 1).contiguous() # [batch_size, num_indices, seq_length*embedding_dim] -> [batch_size, seq_length*embedding_dim, num_indices]
+        features = features.permute(0, 2, 1) # [batch_size, seq_length, num_features] -> [batch_size, num_features, seq_length]
+        features = self.conv1d2(features) # [batch_size, num_features, seq_length] -> [batch_size, num_features, seq_length]
+        # features = features.permute(0, 2, 1)  # [batch_size, num_features, seq_length] -> [batch_size, seq_length, num_features]
         combined = torch.cat([indices, features], dim=-1)
-        lstm_out, _ = self.lstm(combined)  # (batch_size, seq_len, input_size)
+        lstm_out, _ = self.lstm(combined)  
         lstm_out = self.dropout(lstm_out)
         # Applying attention
         attention_weights = F.softmax(self.attention(lstm_out), dim=1)
