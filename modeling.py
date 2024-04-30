@@ -391,7 +391,7 @@ class MyDataset(Dataset):
             x = torch.from_numpy(self.data[idx][1:][::-1].copy())
             y = torch.from_numpy(self.data[idx][0].copy()[:self.cut_num]).unsqueeze(0)
         else:
-            x = torch.from_numpy(self.data[idx][0:][::-1].copy())
+            x = torch.from_numpy(self.data[idx][0:-1][::-1].copy())
             y = torch.from_numpy(self.data[idx][0].copy()[:self.cut_num]).unsqueeze(0)
         if self.model == 'Transformer':
             x_hot = binary_encode_array(x, self.num_classes) 
