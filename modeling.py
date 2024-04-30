@@ -182,7 +182,7 @@ class LSTM_Model(nn.Module):
         super(LSTM_Model, self).__init__()
         self.embedding = nn.Embedding(num_embeddings + 1, embedding_dim)
         self.conv1d = nn.Conv1d(in_channels=input_size, out_channels=embedding_dim*input_size, kernel_size=3, padding=1)
-        self.conv1d2 = nn.Conv1d(in_channels=(windows_size+1)*5, out_channels=embedding_dim*windows_size, kernel_size=3)
+        self.conv1d2 = nn.Conv1d(in_channels=windows_size*5, out_channels=embedding_dim*windows_size, kernel_size=3)
         self.lstm = nn.LSTM(embedding_dim*input_size+(windows_size-2), hidden_size, num_layers, dropout=dropout, batch_first=True) #embedding_dim*20+(input_size-2)
         self.dropout = nn.Dropout(dropout)
         self.attention = nn.Linear(hidden_size, 1)
@@ -252,8 +252,8 @@ class CustomSchedule(_LRScheduler):
 class MyDataset(Dataset):
     def __init__(self, data, windows, cut_num, model='Transformer', num_classes=80, test_flag=0, test_list=[], f_data=0):
         tmp = []
-        if test_flag == 2 and f_data == 0:
-            windows = windows - 1
+        # if test_flag == 2 and f_data == 0:
+        #     windows = windows - 1
         for i in range(len(data) - windows):
             if cut_num > 0:
                 if test_flag == 2 or len(test_list) <= 0 or (test_flag == 0 and data[i][1] not in test_list) or (test_flag == 1 and data[i][1] in test_list):
@@ -264,16 +264,16 @@ class MyDataset(Dataset):
                         _tmp = []
                         item = item - 1
                         if i < windows:
-                            onsecutive_features = [0.0] * (windows + 1)
-                            interval_features = [0.0] * (windows + 1)
+                            onsecutive_features = [0.0] * windows 
+                            interval_features = [0.0] * windows 
                             # trend_features = self.calculate_trend_features(_item)
                             # frequency = list(self.calculate_frequency(_item).values())
-                            odd_even_ratio, high_low_ratio = ([0.0] * (windows + 1), [0.0] * (windows + 1))
+                            odd_even_ratio, high_low_ratio = ([0.0] * windows , [0.0] * windows )
                             # cnt_combinations = self.count_combinations(_item)
-                            prime_composite_ratio = [0.0] * (windows + 1)
+                            prime_composite_ratio = [0.0] * windows 
                         else:
-                            _item = data[i-windows:i+1, 2:cut_num+2] - 1
-                            _item = _item.reshape(windows+1,cut_num)
+                            _item = data[i-windows:i, 2:cut_num+2] - 1
+                            _item = _item.reshape(windows,cut_num)
                             onsecutive_features = self.calculate_consecutive_features(_item)
                             interval_features = self.calculate_interval_features(_item)
                             # trend_features = self.calculate_trend_features(_item)
