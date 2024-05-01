@@ -183,7 +183,7 @@ class LSTM_Model(nn.Module):
         self.embedding = nn.Embedding(num_embeddings + 1, embedding_dim)
         self.conv1d = nn.Conv1d(in_channels=input_size, out_channels=embedding_dim*input_size, kernel_size=3, padding=1)
         self.conv1d2 = nn.Conv1d(in_channels=windows_size*5, out_channels=embedding_dim*windows_size, kernel_size=3)
-        self.lstm = nn.LSTM(embedding_dim*input_size+(windows_size-2), hidden_size, num_layers, dropout=dropout, batch_first=True) #embedding_dim*20+(input_size-2)
+        self.lstm = nn.LSTM(windows_size*5+input_size, hidden_size, num_layers, dropout=dropout, batch_first=True) # embedding_dim*20+(input_size-2) // embedding_dim*input_size+(windows_size-2)
         self.dropout = nn.Dropout(dropout)
         self.attention = nn.Linear(hidden_size, 1)
         self.linear = nn.Linear(hidden_size, output_size)
@@ -196,14 +196,21 @@ class LSTM_Model(nn.Module):
         indices = x[:, :, :20].long()
         features = x[:, :, 20:].float()
         indices = self.embedding(indices)  # [batch_size, seq_length, num_indices] -> [batch_size, seq_length, num_indices, embedding_dim]
-        indices = indices.permute(0, 2, 1, 3).contiguous() # [batch_size, seq_length, num_indices, embedding_dim] -> [batch_size, num_indices, seq_length, embedding_dim]
-        indices = indices.view(indices.size(0), indices.size(1), -1)  # [batch_size, num_indices, seq_length, embedding_dim] -> [batch_size, num_indices, seq_length*embedding_dim]
-        indices = self.conv1d(indices)  # [batch_size, num_indices, seq_length*embedding_dim] -> [batch_size, num_indices, seq_length*embedding_dim]
-        indices = indices.permute(0, 2, 1).contiguous() # [batch_size, num_indices, seq_length*embedding_dim] -> [batch_size, seq_length*embedding_dim, num_indices]
-        features = features.permute(0, 2, 1) # [batch_size, seq_length, num_features] -> [batch_size, num_features, seq_length]
-        features = self.conv1d2(features) # [batch_size, num_features, seq_length] -> [batch_size, num_features, seq_length]
-        # features = features.permute(0, 2, 1)  # [batch_size, num_features, seq_length] -> [batch_size, seq_length, num_features]
-        combined = torch.cat([indices, features], dim=-1)
+        
+        # use conv1d to reduce the number of features
+        # indices = indices.permute(0, 2, 1, 3).contiguous() # [batch_size, seq_length, num_indices, embedding_dim] -> [batch_size, num_indices, seq_length, embedding_dim]
+        # indices = indices.view(indices.size(0), indices.size(1), -1)  # [batch_size, num_indices, seq_length, embedding_dim] -> [batch_size, num_indices, seq_length*embedding_dim]
+        # indices = self.conv1d(indices)  # [batch_size, num_indices, seq_length*embedding_dim] -> [batch_size, num_indices, seq_length*embedding_dim]
+        # indices = indices.permute(0, 2, 1).contiguous() # [batch_size, num_indices, seq_length*embedding_dim] -> [batch_size, seq_length*embedding_dim, num_indices]
+        # features = features.permute(0, 2, 1) # [batch_size, seq_length, num_features] -> [batch_size, num_features, seq_length]
+        # features = self.conv1d2(features) # [batch_size, num_features, seq_length] -> [batch_size, num_features, seq_length]
+        # # features = features.permute(0, 2, 1)  # [batch_size, num_features, seq_length] -> [batch_size, seq_length, num_features]
+        
+        # use max pooling to reduce the number of features
+        pooled_indices = F.max_pool2d(indices, (1, indices.shape[3])) # [batch_size, seq_length, num_indices, embedding_dim] -> [batch_size, seq_length, num_indices, 1]
+        pooled_indices = pooled_indices.squeeze(-1)  # [batch_size, seq_length, num_indices, 1] -> [batch_size, seq_length, num_indices]
+
+        combined = torch.cat([pooled_indices, features], dim=-1)
         lstm_out, _ = self.lstm(combined)  
         lstm_out = self.dropout(lstm_out)
         # Applying attention
