@@ -12,6 +12,7 @@ from torch.utils.data import  Dataset
 from torch.optim.lr_scheduler import _LRScheduler
 from itertools import combinations
 from scipy.stats import linregress
+from tqdm import tqdm
 
 def binary_encode_array(input_array, num_classes=80):
     """
@@ -261,7 +262,9 @@ class MyDataset(Dataset):
         tmp = []
         # if test_flag == 2 and f_data == 0:
         #     windows = windows - 1
+        pbar = tqdm(total=len(data) - windows)
         for i in range(len(data) - windows):
+            pbar.update(1)
             if cut_num > 0:
                 if test_flag == 2 or len(test_list) <= 0 or (test_flag == 0 and data[i][1] not in test_list) or (test_flag == 1 and data[i][1] in test_list):
                     sub_data = data[i:(i+windows+1), 2:cut_num+2]
@@ -297,6 +300,7 @@ class MyDataset(Dataset):
                 if test_flag == 2 or len(test_list) <= 0 or (test_flag == 0 and data[i][1] not in test_list) or (test_flag == 1 and data[i][1] in test_list):
                     sub_data = data[i:(i+windows+1), cut_num*(-1):]
                     tmp.append(sub_data.reshape(windows+1, data.shape[1]-(cut_num*(-1))))
+        pbar.close()
         self.data = np.array(tmp)
         self.model = model
         self.num_classes = num_classes
