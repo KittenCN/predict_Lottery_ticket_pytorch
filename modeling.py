@@ -181,17 +181,18 @@ class Transformer_Model(nn.Module):
 class LSTM_Model(nn.Module): 
     def __init__(self, input_size, output_size=20, hidden_size=512, num_layers=1, num_heads=16, dropout=0.1, num_embeddings=20, embedding_dim=50, windows_size=30):
         super(LSTM_Model, self).__init__()
-        self.embedding = nn.Embedding(num_embeddings + 1, embedding_dim)
+        self.embedding = nn.Embedding(num_embeddings+1, embedding_dim)
         self.conv1d = nn.Conv1d(in_channels=input_size, out_channels=embedding_dim*input_size, kernel_size=3, padding=1)
         self.conv1d2 = nn.Conv1d(in_channels=windows_size*5, out_channels=embedding_dim*windows_size, kernel_size=3)
-        self.lstm = nn.LSTM(windows_size*5+input_size, hidden_size, num_layers, dropout=dropout, batch_first=True) # embedding_dim*20+(input_size-2) // embedding_dim*input_size+(windows_size-2)
+        self.lstm = nn.LSTM(windows_size*5+input_size, hidden_size, num_layers, dropout=dropout, batch_first=True, bidirectional=True) # embedding_dim*20+(input_size-2) // embedding_dim*input_size+(windows_size-2)
         self.dropout = nn.Dropout(dropout)
-        self.attention = nn.Linear(hidden_size, 1)
-        self.linear = nn.Linear(hidden_size, output_size)
+        self.attention = nn.Linear(hidden_size*2, 1)
+        self.MultiheadAttention = nn.MultiheadAttention(embed_dim=hidden_size*2, num_heads=num_heads, dropout=dropout)
+        self.linear = nn.Linear(hidden_size*2, output_size)
         self.input_size = input_size
 
     def forward(self, x):
-        # LSTM 层
+        # LSTM input: (batch_size, seq_length, input_size)
         # x = x.view(x.size(0), x.size(1), -1)
         # x: [batch_size, seq_length, num_indices]
         indices = x[:, :, :20].long()
@@ -212,13 +213,21 @@ class LSTM_Model(nn.Module):
         pooled_indices = pooled_indices.squeeze(-1)  # [batch_size, seq_length, num_indices, 1] -> [batch_size, seq_length, num_indices]
 
         combined = torch.cat([pooled_indices, features], dim=-1)
-        lstm_out, _ = self.lstm(combined)  
-        lstm_out = self.dropout(lstm_out)
-        # Applying attention
-        attention_weights = F.softmax(self.attention(lstm_out), dim=1)
-        context_vector = torch.sum(attention_weights * lstm_out, dim=1)
+        lstm_out, _ = self.lstm(combined)  # [batch_size, seq_length, hidden_size*2]
+        lstm_out = self.dropout(lstm_out) # [batch_size, seq_length, hidden_size*2]
+
+        # # Applying attention
+        # attention_weights = F.softmax(self.attention(lstm_out), dim=1)
+        # context_vector = torch.sum(attention_weights * lstm_out, dim=1)
+
+        # Applying multihead attention
+        lstm_out =lstm_out.permute(1, 0, 2)  # [batch_size, seq_length, hidden_size*2] -> [seq_length, batch_size, hidden_size*2]
+        context_vector, _ = self.MultiheadAttention(lstm_out, lstm_out, lstm_out)
+        context_vector = context_vector.permute(1, 0, 2)  # [seq_length, batch_size, hidden_size*2] -> [batch_size, seq_length, hidden_size*2]
+        context_vector = context_vector[:, -1, :] # [batch_size, seq_length, hidden_size*2] -> [batch_size, hidden_size*2]
         linear_out = self.linear(context_vector)
-        # 取最后一个时间步的输出
+
+        # Get the last output
         # lstm_out = lstm_out[:, -1, :]  # (batch_size, hidden_size)
         # linear_out = self.linear(lstm_out)  # (batch_size, output_size)
         # linear_out = torch.sigmoid(linear_out)
@@ -291,8 +300,8 @@ class MyDataset(Dataset):
                             odd_even_ratio, high_low_ratio = self.calculate_odd_even_and_high_low_ratios(_item)
                             # cnt_combinations = self.count_combinations(_item)
                             prime_composite_ratio = self.calculate_prime_composite_ratio(_item)
-                        features = np.hstack((onsecutive_features, interval_features,  \
-                                                odd_even_ratio, high_low_ratio, prime_composite_ratio))
+                        features = np.hstack((self.standardize(onsecutive_features), self.standardize(interval_features),  \
+                                                self.standardize(odd_even_ratio), self.standardize(high_low_ratio), self.standardize(prime_composite_ratio)))
                         _tmp = np.concatenate((item, features))
                         temp_item.append(_tmp)
                     tmp.append(temp_item)
@@ -395,6 +404,12 @@ class MyDataset(Dataset):
         # 返回出现频率最高的前k个组合
         return sorted(combo_counts.items(), key=lambda item: item[1], reverse=True)[:top_k]
 
+    def standardize(self, data_list):
+        tensor = torch.tensor(data_list, dtype=torch.float32)
+        mean = tensor.mean(dim=0, keepdim=True)
+        std = tensor.std(dim=0, keepdim=True)
+        standardized_tensor = (tensor - mean) / (std + 1e-8)
+        return standardized_tensor.tolist()
 
     def __getitem__(self, idx):
         # 将每组数据分为输入序列和目标序列

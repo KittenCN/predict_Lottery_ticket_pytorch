@@ -65,6 +65,8 @@ blue_train_data = None
 blue_test_data = None
 
 if args.tensorboard == 1:
+    if not os.path.exists('../tf-logs'):
+        os.makedirs('../tf-logs')
     writer = SummaryWriter('../tf-logs')
 
 if args.model == "Transformer":
