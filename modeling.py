@@ -182,14 +182,13 @@ class LSTM_Model(nn.Module):
     def __init__(self, input_size, output_size=20, hidden_size=512, num_layers=1, num_heads=16, dropout=0.1, num_embeddings=20, embedding_dim=50, windows_size=30):
         super(LSTM_Model, self).__init__()
         self.embedding = nn.Embedding(num_embeddings+1, embedding_dim)
-        self.conv1d = nn.Conv1d(in_channels=input_size, out_channels=embedding_dim*input_size, kernel_size=3, padding=1)
-        self.conv1d2 = nn.Conv1d(in_channels=windows_size*5, out_channels=embedding_dim*windows_size, kernel_size=3)
+        # self.conv1d = nn.Conv1d(in_channels=input_size, out_channels=embedding_dim*input_size, kernel_size=3, padding=1)
+        # self.conv1d2 = nn.Conv1d(in_channels=windows_size*5, out_channels=embedding_dim*windows_size, kernel_size=3)
         self.lstm = nn.LSTM(windows_size*5+input_size, hidden_size, num_layers, dropout=dropout, batch_first=True, bidirectional=True) # embedding_dim*20+(input_size-2) // embedding_dim*input_size+(windows_size-2)
         self.dropout = nn.Dropout(dropout)
-        self.attention = nn.Linear(hidden_size*2, 1)
+        # self.attention = nn.Linear(hidden_size*2, 1)
         self.MultiheadAttention = nn.MultiheadAttention(embed_dim=hidden_size*2, num_heads=num_heads, dropout=dropout)
         self.linear = nn.Linear(hidden_size*2, output_size)
-        self.input_size = input_size
 
     def forward(self, x):
         # LSTM input: (batch_size, seq_length, input_size)
