@@ -53,7 +53,7 @@ os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 pred_key = {}
-save_epoch = 10
+save_epoch = 100
 save_interval = 60
 last_save_time = time.time()
 best_score = 999999999
