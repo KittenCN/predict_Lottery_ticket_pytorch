@@ -189,13 +189,14 @@ class LSTM_Model(nn.Module):
         # self.attention = nn.Linear(hidden_size*2, 1)
         self.MultiheadAttention = nn.MultiheadAttention(embed_dim=hidden_size*2, num_heads=num_heads, dropout=dropout)
         self.linear = nn.Linear(hidden_size*2, output_size)
+        self.input_size = input_size
 
     def forward(self, x):
         # LSTM input: (batch_size, seq_length, input_size)
         # x = x.view(x.size(0), x.size(1), -1)
         # x: [batch_size, seq_length, num_indices]
-        indices = x[:, :, :20].long()
-        features = x[:, :, 20:].float()
+        indices = x[:, :, :self.input_size].long()
+        features = x[:, :, self.input_size:].float()
         indices = self.embedding(indices)  # [batch_size, seq_length, num_indices] -> [batch_size, seq_length, num_indices, embedding_dim]
         
         # use conv1d to reduce the number of features
