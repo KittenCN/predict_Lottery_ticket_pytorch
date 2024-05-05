@@ -8,6 +8,7 @@ import torch.optim as optim
 import torch.utils.data as Data
 import numpy as np
 import torch.nn.functional as F
+from scipy.stats import skew, kurtosis
 from torch.utils.data import  Dataset
 from torch.optim.lr_scheduler import _LRScheduler
 from itertools import combinations
@@ -184,7 +185,7 @@ class LSTM_Model(nn.Module):
         self.embedding = nn.Embedding(num_embeddings+1, embedding_dim)
         # self.conv1d = nn.Conv1d(in_channels=input_size, out_channels=embedding_dim*input_size, kernel_size=3, padding=1)
         # self.conv1d2 = nn.Conv1d(in_channels=windows_size*5, out_channels=embedding_dim*windows_size, kernel_size=3)
-        self.lstm = nn.LSTM(windows_size*5+input_size, hidden_size, num_layers, dropout=dropout, batch_first=True, bidirectional=True) # embedding_dim*20+(input_size-2) // embedding_dim*input_size+(windows_size-2)
+        self.lstm = nn.LSTM(windows_size*12+input_size, hidden_size, num_layers, dropout=dropout, batch_first=True, bidirectional=True) # embedding_dim*20+(input_size-2) // embedding_dim*input_size+(windows_size-2)
         self.dropout = nn.Dropout(dropout)
         # self.attention = nn.Linear(hidden_size*2, 1)
         self.MultiheadAttention = nn.MultiheadAttention(embed_dim=hidden_size*2, num_heads=num_heads, dropout=dropout)
@@ -290,6 +291,7 @@ class MyDataset(Dataset):
                             odd_even_ratio, high_low_ratio = ([0.0] * windows , [0.0] * windows )
                             # cnt_combinations = self.count_combinations(_item)
                             prime_composite_ratio = [0.0] * windows 
+                            max_val=min_val=mean_val=median_val=std_val=skewness_val=kurtosis_val = [0.0] * windows 
                         else:
                             _item = data[i-windows:i, 2:cut_num+2] - 1
                             _item = _item.reshape(windows,cut_num)
@@ -300,8 +302,13 @@ class MyDataset(Dataset):
                             odd_even_ratio, high_low_ratio = self.calculate_odd_even_and_high_low_ratios(_item)
                             # cnt_combinations = self.count_combinations(_item)
                             prime_composite_ratio = self.calculate_prime_composite_ratio(_item)
+                            max_val, min_val, mean_val, median_val, std_val, skewness_val, kurtosis_val = self.calculate_statistical_features(_item)
                         features = np.hstack((self.standardize(onsecutive_features), self.standardize(interval_features),  \
-                                                self.standardize(odd_even_ratio), self.standardize(high_low_ratio), self.standardize(prime_composite_ratio)))
+                                                self.standardize(odd_even_ratio), self.standardize(high_low_ratio), \
+                                                self.standardize(prime_composite_ratio), self.standardize(max_val), \
+                                                self.standardize(min_val), self.standardize(mean_val), \
+                                                self.standardize(median_val), self.standardize(std_val), \
+                                                self.standardize(skewness_val), self.standardize(kurtosis_val)))
                         _tmp = np.concatenate((item, features))
                         temp_item.append(_tmp)
                     tmp.append(temp_item)
@@ -410,6 +417,25 @@ class MyDataset(Dataset):
         std = tensor.std(dim=0, keepdim=True)
         standardized_tensor = (tensor - mean) / (std + 1e-8)
         return standardized_tensor.tolist()
+    
+    def calculate_statistical_features(self, numbers):
+        max_val = []
+        min_val = []
+        mean_val = []
+        median_val = []
+        std_val = []
+        skewness_val = []
+        kurtosis_val = []
+        for row in numbers:
+            row_array = np.array(row)
+            max_val.append(np.max(row_array))
+            min_val.append(np.min(row_array))
+            mean_val.append(np.mean(row_array))
+            median_val.append(np.median(row_array))
+            std_val.append(np.std(row_array))
+            skewness_val.append(skew(row_array))
+            kurtosis_val.append(kurtosis(row_array))
+        return max_val, min_val, mean_val, median_val, std_val, skewness_val, kurtosis_val
 
     def __getitem__(self, idx):
         # 将每组数据分为输入序列和目标序列
@@ -427,17 +453,6 @@ class MyDataset(Dataset):
             # y_hot = one_hot_encode_array(y, self.num_classes)
             x_hot = x
             y_hot = y
-            # for item in x:
-            #     _item = []
-            #     item = item.tolist()
-            #     onsecutive_features = self.calculate_consecutive_features(item)
-            #     interval_features = self.calculate_interval_features(item)
-            #     trend_features = self.calculate_trend_features(item)
-            #     frequency = self.calculate_frequency(item)
-            #     odd_even_ratio, high_low_ratio = self.calculate_odd_even_and_high_low_ratios(item)
-            #     cnt_combinations = self.count_combinations(item)
-            #     features = np.hstack((onsecutive_features, interval_features, trend_features, list(frequency.values()), odd_even_ratio, high_low_ratio, cnt_combinations))
-            #     _item.append((_item, features))
         return x_hot, y_hot
 
 # 定义 Transformer 模型类 (废除不用)
