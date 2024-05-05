@@ -13,6 +13,7 @@ ball_name = [
 data_file_name = "data.csv"
 data_cq_file_name = "data_cq.csv"
 predict_path = "predict/"
+result_path = '../results'
 
 name_path = {
     "ssq": {

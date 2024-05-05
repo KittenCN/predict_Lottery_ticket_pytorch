@@ -21,6 +21,8 @@ parser.add_argument('--test_mode', default=0, type=int, help="test_mode")
 args = parser.parse_args()
 
 if __name__ == '__main__':
+    if not os.path.exists(result_path):
+        os.makedirs(result_path)
     if not args.name:
         raise Exception("玩法名称不能为空！")
     elif not args.windows_size:

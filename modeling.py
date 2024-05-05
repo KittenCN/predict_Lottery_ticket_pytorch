@@ -314,8 +314,41 @@ class MyDataset(Dataset):
                     tmp.append(temp_item)
             else:
                 if test_flag == 2 or len(test_list) <= 0 or (test_flag == 0 and data[i][1] not in test_list) or (test_flag == 1 and data[i][1] in test_list):
-                    sub_data = data[i:(i+windows+1), cut_num*(-1):]
-                    tmp.append(sub_data.reshape(windows+1, data.shape[1]-(cut_num*(-1))))
+                    sub_data = data[i:(i+windows+1), cut_num*(-1)+2:]
+                    sub_data = sub_data.reshape(windows+1, -1)
+                    temp_item = []
+                    for item in sub_data:
+                        _tmp = []
+                        item = item - 1
+                        if i < windows:
+                            onsecutive_features = [0.0] * windows 
+                            interval_features = [0.0] * windows 
+                            # trend_features = self.calculate_trend_features(_item)
+                            # frequency = list(self.calculate_frequency(_item).values())
+                            odd_even_ratio, high_low_ratio = ([0.0] * windows , [0.0] * windows )
+                            # cnt_combinations = self.count_combinations(_item)
+                            prime_composite_ratio = [0.0] * windows 
+                            max_val=min_val=mean_val=median_val=std_val=skewness_val=kurtosis_val = [0.0] * windows 
+                        else:
+                            _item = data[i-windows:i, cut_num*(-1)+2:] - 1
+                            _item = _item.reshape(windows,cut_num)
+                            onsecutive_features = self.calculate_consecutive_features(_item)
+                            interval_features = self.calculate_interval_features(_item)
+                            # trend_features = self.calculate_trend_features(_item)
+                            # frequency = list(self.calculate_frequency(_item).values())
+                            odd_even_ratio, high_low_ratio = self.calculate_odd_even_and_high_low_ratios(_item)
+                            # cnt_combinations = self.count_combinations(_item)
+                            prime_composite_ratio = self.calculate_prime_composite_ratio(_item)
+                            max_val, min_val, mean_val, median_val, std_val, skewness_val, kurtosis_val = self.calculate_statistical_features(_item)
+                        features = np.hstack((self.standardize(onsecutive_features), self.standardize(interval_features),  \
+                                                self.standardize(odd_even_ratio), self.standardize(high_low_ratio), \
+                                                self.standardize(prime_composite_ratio), self.standardize(max_val), \
+                                                self.standardize(min_val), self.standardize(mean_val), \
+                                                self.standardize(median_val), self.standardize(std_val), \
+                                                self.standardize(skewness_val), self.standardize(kurtosis_val)))
+                        _tmp = np.concatenate((item, features))
+                        temp_item.append(_tmp)
+                    tmp.append(temp_item)
         pbar.close()
         self.data = np.array(tmp)
         self.model = model
@@ -435,7 +468,15 @@ class MyDataset(Dataset):
             std_val.append(np.std(row_array))
             skewness_val.append(skew(row_array))
             kurtosis_val.append(kurtosis(row_array))
+        skewness_val = self.check_nan(skewness_val)
+        kurtosis_val = self.check_nan(kurtosis_val)
         return max_val, min_val, mean_val, median_val, std_val, skewness_val, kurtosis_val
+
+    def check_nan(self, lst):
+        for i in range(len(lst)):
+            if np.isnan(lst[i]):
+                lst[i] = 0
+        return lst
 
     def __getitem__(self, idx):
         # 将每组数据分为输入序列和目标序列

@@ -393,14 +393,18 @@ def run_predict(window_size, sequence_len, hidden_size=128, num_layers=8, num_he
                 logger.info("测试{}结果为: ".format(sub_name))
             correct_nums = 0
             total_nums = 0
+            result_strings = []
             if model == "Transformer":
                 y_pred_list = modeling.binary_decode_array(y_pred, threshold=0.25, top_k=model_args[mini_args.name]["model_args"]["{}_n_class".format(sub_name_eng)])
                 for row in y_pred_list:
                     row_limit = row[0:model_args[mini_args.name]["model_args"]["{}_n_class".format(sub_name_eng)]]
                     if test_mode == 0 or f_data == 0:
                         logger.info("超过阈值的数据: {}".format(row))
+                        result_strings.append("超过阈值的数据: {}".format(row))
                         logger.info("前K位超过阈值的数据: {}".format(row_limit))
+                        result_strings.append("前K位超过阈值的数据: {}".format(row_limit))
                         logger.info("排序后前K位超过阈值的数据: {}".format(sorted(row_limit)))
+                        result_strings.append("排序后前K位超过阈值的数据: {}".format(sorted(row_limit)))
                     else:
                         row_limit = list(dict.fromkeys(row_limit))
                         row_limit_set = set(row_limit)
@@ -412,7 +416,9 @@ def run_predict(window_size, sequence_len, hidden_size=128, num_layers=8, num_he
                 y_pred_list = modeling.decode_one_hot(softmax(y_pred), sort_by_max_value=True, num_classes=model_args[mini_args.name]["model_args"]["{}_n_class".format(sub_name_eng)])
                 if test_mode == 0 or f_data == 0:
                     logger.info("超过阈值的数据: {}".format(list(dict.fromkeys(y_pred_list))))
+                    result_strings.append("超过阈值的数据: {}".format(list(dict.fromkeys(y_pred_list))))
                     logger.info("排序后超过阈值的数据: {}".format(sorted(list(dict.fromkeys(y_pred_list)))))
+                    result_strings.append("排序后超过阈值的数据: {}".format(sorted(list(dict.fromkeys(y_pred_list)))))
                 else:
                     y_target_set = set((y_target+1).view(y_target.size(0), -1).tolist()[0])
                     y_pred_set = set(list(dict.fromkeys(y_pred_list)))
@@ -420,6 +426,8 @@ def run_predict(window_size, sequence_len, hidden_size=128, num_layers=8, num_he
                     correct_nums += len(y_pred_set & y_target_set)
             if test_mode != 0 and f_data > 0:
                 logger.info("预测{}结果为: {:.2f}%".format(sub_name, correct_nums / (total_nums if total_nums > 0 else 1) * 100))
+                result_strings.append("预测{}结果为: {:.2f}%".format(sub_name, correct_nums / (total_nums if total_nums > 0 else 1) * 100))
+            write_strings_to_file(result_path, result_strings)
         else:
             logger.warning("抱歉，没有找到{}模型！".format(sub_name))
             exit(0)
@@ -513,6 +521,20 @@ def try_error(name, predict_features, windows_size):
 #     filetitle = _title.copy()
 #     return filedata, filetitle
 
+def write_strings_to_file(folder, strings):
+    # Get the current date and time
+    current_datetime = datetime.datetime.now()
+
+    # Format the current date and time as a string
+    datetime_string = current_datetime.strftime('%Y%m%d%H%M%S')
+
+    # Create the file path
+    file_path = os.path.join(folder, datetime_string + '.txt')
+
+    # Open the file in append mode and write the strings
+    with open(file_path, 'a') as file:
+        for string in strings:
+            file.write(string + '\n')
 
 # if __name__ == "__main__":
 #     spider_cq("kl8", "20180101", "20180110", "train")
