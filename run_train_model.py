@@ -44,8 +44,9 @@ parser.add_argument('--lr', default=0.01, type=float, help="learning rate")
 parser.add_argument('--plus_mode', default=0, type=int, help="plus mode")
 parser.add_argument('--ext_times', default=1000, type=int, help="ext_times")
 parser.add_argument('--init', default=0, type=int, help="init")
-parser.add_argument('--train_mode', default=0, type=int, help="0: mormal, 1: new trainning, 2: best trainning")
-parser.add_argument('--split_time', default=2021351, type=int, help="tranning data split time")
+parser.add_argument('--train_mode', default=0, type=int, help="0: mormal, 1: new trainning, 2: best test model, 3: best loss model")
+parser.add_argument('--split_time', default=2021351, type=int, help="tranning data split time, greater than 0, will saving best test model")
+parser.add_argument('--save_best_loss', default=0, type=int, help="save best loss model")
 args = parser.parse_args()
 
 warnings.filterwarnings('ignore')
@@ -57,6 +58,7 @@ save_epoch = 100
 save_interval = 60
 last_save_time = time.time()
 best_score = 999999999
+best_loss = 999999999
 start_dt = dt.now().strftime("%Y%m%d%H%M%S")
 test_list = []
 red_train_data = None
@@ -98,11 +100,12 @@ def save_model(model, optimizer, lr_scheduler, scaler, epoch, syspath, ball_mode
         'no_update_times': no_update_times,
         'split_time': args.split_time,
         'test_list': test_list,
+        'best_lost': best_loss,
     }
     torch.save(save_dict, "{}{}_pytorch_{}{}.{}".format(syspath, ball_model_name, args.model, other, extension))
 
 def load_model(m_args, syspath, sub_name_eng, model, optimizer, lr_scheduler, scaler, sub_name="红球", other=""):
-    global best_score, start_dt
+    global best_score, start_dt, best_loss
     _test_list = []
     current_epoch = 0
     no_update_times = 0
@@ -147,6 +150,8 @@ def load_model(m_args, syspath, sub_name_eng, model, optimizer, lr_scheduler, sc
                 split_time = checkpoint['split_time']
             if 'test_list' in checkpoint:
                 _test_list = checkpoint['test_list']
+            if 'best_lost' in checkpoint:
+                best_loss = checkpoint['best_lost']
             if split_time < 0 and len(_test_list) <= 0:
                 logger.warning("测试数据集丢失，请重新训练！")
                 sys.exit()
@@ -166,7 +171,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     :param y_data: 训练标签
     :return:
     """
-    global last_save_time, best_score, start_dt, test_list, red_train_data, red_test_data, blue_train_data, blue_test_data
+    global last_save_time, best_score, start_dt, test_list, red_train_data, red_test_data, blue_train_data, blue_test_data, best_loss
     _test_list = []
     sub_name_eng = "red" if sub_name == "红球" else "blue"
     ball_model_name = red_ball_model_name if sub_name == "红球" else blue_ball_model_name
@@ -193,8 +198,11 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     _other = ""
     scaler = GradScaler()
     if args.train_mode != 1:
-        if args.train_mode == 2:
-            _files = glob.glob(os.path.join(syspath, '*best*'))
+        if args.train_mode in [2, 3]:
+            if args.train_mode == 2:
+                _files = glob.glob(os.path.join(syspath, '*best_test*'))
+            else:
+                _files = glob.glob(os.path.join(syspath, '*best_loss*'))
             if len(_files) <= 0:
                 logger.info("模型没有最优版本，将读取最后版本继续训练！")
             else:
@@ -249,7 +257,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
         if no_update_times > args.ext_times and args.plus_mode == 1:
             print()
             no_update_times = 0
-            _, _, _, _ = load_model(m_args, syspath, sub_name_eng, model, optimizer, lr_scheduler, scaler, sub_name, other="_{}_{}".format(start_dt, "best"))
+            _, _, _, _ = load_model(m_args, syspath, sub_name_eng, model, optimizer, lr_scheduler, scaler, sub_name, other="_{}_{}".format(start_dt, "best_test"))
         if epoch == current_epoch:
             pbar.update(current_epoch)
         running_loss = 0.0
@@ -338,11 +346,13 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
                 if top_loss < best_score:
                     no_update_times = 0
                     best_score = top_loss
-                    save_model(model, optimizer, lr_scheduler, scaler, epoch, syspath, ball_model_name, other="_{}_{}".format(start_dt, "best"), no_update_times=no_update_times)
+                    save_model(model, optimizer, lr_scheduler, scaler, epoch, syspath, ball_model_name, other="_{}_{}".format(start_dt, "best_test"), no_update_times=no_update_times)
                 if topk_loss < best_score:
                     no_update_times = 0
                     best_score = topk_loss
-                    save_model(model, optimizer, lr_scheduler, scaler, epoch, syspath, ball_model_name, other="_{}_{}".format(start_dt, "best"), no_update_times=no_update_times)
+                    save_model(model, optimizer, lr_scheduler, scaler, epoch, syspath, ball_model_name, other="_{}_{}".format(start_dt, "best_test"), no_update_times=no_update_times)
+            if args.save_best_loss > 0 and best_loss > test_loss / (test_times if test_times > 0 else 1):
+                save_model(model, optimizer, lr_scheduler, scaler, epoch, syspath, ball_model_name, other="_{}_{}".format(start_dt, "best_loss"), no_update_times=no_update_times)
         if args.tensorboard == 1:
             writer.add_scalar('Loss/Running', running_loss / (running_times if running_times > 0 else 1), epoch)
             if (epoch + 1) % save_epoch == 0:
