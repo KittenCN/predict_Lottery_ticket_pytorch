@@ -54,7 +54,7 @@ os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 pred_key = {}
-save_epoch = 100
+save_epoch = 10
 save_interval = 60
 last_save_time = time.time()
 best_score = 999999999
@@ -125,11 +125,26 @@ def load_model(m_args, syspath, sub_name_eng, model, optimizer, lr_scheduler, sc
                     args.num_layers = checkpoint['num_layers']
                     args.num_heads = checkpoint['num_heads']
                     if args.model == "Transformer":
-                        model = _model(input_size=m_args["model_args"]["{}_n_class".format(sub_name_eng)]*m_args["model_args"]["windows_size"], output_size=m_args["model_args"]["{}_n_class".format(sub_name_eng)], hidden_size=args.hidden_size, num_layers=args.num_layers, num_heads=args.num_heads, dropout=0.5).to(device)
+                        model = _model(input_size=m_args["model_args"]["{}_n_class".format(sub_name_eng)]*m_args["model_args"]["windows_size"], 
+                                       output_size=m_args["model_args"]["{}_n_class".format(sub_name_eng)], 
+                                       hidden_size=args.hidden_size, 
+                                       num_layers=args.num_layers, 
+                                       num_heads=args.num_heads, 
+                                       dropout=0.5).to(device)
                     elif args.model == "LSTM":
-                        model = _model(input_size=m_args["model_args"]["{}_sequence_len".format(sub_name_eng)], output_size=m_args["model_args"]["{}_sequence_len".format(sub_name_eng)]*m_args["model_args"]["{}_n_class".format(sub_name_eng)], hidden_size=args.hidden_size, num_layers=args.num_layers, num_heads=args.num_heads, dropout=0.5, num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)], embedding_dim=50, windows_size=int(args.windows_size)).to(device)
+                        model = _model(input_size=m_args["model_args"]["{}_sequence_len".format(sub_name_eng)], 
+                                       output_size=m_args["model_args"]["{}_sequence_len".format(sub_name_eng)]*m_args["model_args"]["{}_n_class".format(sub_name_eng)], 
+                                       hidden_size=args.hidden_size, 
+                                       num_layers=args.num_layers, 
+                                       num_heads=args.num_heads, 
+                                       dropout=0.5, 
+                                       num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)], 
+                                       embedding_dim=50, 
+                                       windows_size=int(args.windows_size)).to(device)
                     optimizer = optim.Adam(model.parameters(), lr=args.lr)
-                    lr_scheduler = modeling.CustomSchedule(optimizer=optimizer, d_model=args.hidden_size, warmup_steps=model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]*0.2)
+                    lr_scheduler = modeling.CustomSchedule(optimizer=optimizer, 
+                                                           d_model=args.hidden_size, 
+                                                           warmup_steps=model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]*0.2)
                 else:
                     logger.info("请修改参数或重新训练！")
                     sys.exit()
@@ -182,16 +197,31 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     logger.info("标签数据维度: {}".format(dataset.data.shape))
     # 定义模型和优化器
     if args.model == "Transformer":
-        model = _model(input_size=m_args["model_args"]["{}_n_class".format(sub_name_eng)]*m_args["model_args"]["windows_size"], output_size=m_args["model_args"]["{}_n_class".format(sub_name_eng)], hidden_size=args.hidden_size, num_layers=args.num_layers, num_heads=args.num_heads, dropout=0.5).to(device)
+        model = _model(input_size=m_args["model_args"]["{}_n_class".format(sub_name_eng)]*m_args["model_args"]["windows_size"], 
+                       output_size=m_args["model_args"]["{}_n_class".format(sub_name_eng)], 
+                       hidden_size=args.hidden_size, 
+                       num_layers=args.num_layers, 
+                       num_heads=args.num_heads, 
+                       dropout=0.5).to(device)
     elif args.model == "LSTM":
-        model = _model(input_size=m_args["model_args"]["{}_sequence_len".format(sub_name_eng)], output_size=m_args["model_args"]["{}_sequence_len".format(sub_name_eng)]*m_args["model_args"]["{}_n_class".format(sub_name_eng)], hidden_size=args.hidden_size, num_layers=args.num_layers, num_heads=args.num_heads, dropout=0.5, num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)], embedding_dim=50, windows_size=int(args.windows_size)).to(device)
+        model = _model(input_size=m_args["model_args"]["{}_sequence_len".format(sub_name_eng)], 
+                       output_size=m_args["model_args"]["{}_sequence_len".format(sub_name_eng)]*m_args["model_args"]["{}_n_class".format(sub_name_eng)], 
+                       hidden_size=args.hidden_size, 
+                       num_layers=args.num_layers, 
+                       num_heads=args.num_heads, 
+                       dropout=0.5, 
+                       num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)], 
+                       embedding_dim=50, 
+                       windows_size=int(args.windows_size)).to(device)
     # criterion = nn.MSELoss()
     # criterion = nn.BCEWithLogitsLoss() # 二分类交叉熵
     # criterion = nn.BCELoss() # 二分类交叉熵
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
     # lr_scheduler=modeling.CustomSchedule(d_model=args.hidden_size, optimizer=optimizer)
-    lr_scheduler = modeling.CustomSchedule(optimizer=optimizer, d_model=args.hidden_size, warmup_steps=model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]*0.2)
+    lr_scheduler = modeling.CustomSchedule(optimizer=optimizer, 
+                                           d_model=args.hidden_size, 
+                                           warmup_steps=model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]*0.2)
     current_epoch = 0
     no_update_times = 0
     split_time = args.split_time
@@ -214,36 +244,49 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
                     logger.info("模型没有最优版本，将读取最后版本继续训练！")
         elif args.train_mode == 0:
             logger.info("系统将尝试读取最后版本继续训练！")
-        current_epoch, no_update_times, split_time, _test_list = load_model(m_args, syspath, sub_name_eng, model, optimizer, lr_scheduler, scaler, sub_name, other=_other)
+        current_epoch, no_update_times, split_time, _test_list = load_model(m_args, syspath, sub_name_eng, model, optimizer, 
+                                                                            lr_scheduler, scaler, sub_name, other=_other)
     else:
         logger.info("系统将重新训练！")
     if split_time != args.split_time or (split_time < 0 and set(_test_list) != set(test_list) and len(_test_list) > 0):
         logger.info("读取已保存的测试数据集，将重新载入数据！")
         args.split_time = split_time
         test_list = _test_list
-        red_train_data = create_train_data(name=args.name, windows=model_args[name]["model_args"]["windows_size"], dataset=1, ball_type="red", cq=args.cq, test_flag=0, test_begin=args.split_time, f_data=0, model=args.model, num_classes=model_args[name]["model_args"]["red_n_class"], test_list=test_list)
+        red_train_data = create_train_data(name=args.name, windows=model_args[name]["model_args"]["windows_size"], 
+                                           dataset=1, ball_type="red", cq=args.cq, test_flag=0, test_begin=args.split_time, 
+                                           f_data=0, model=args.model, num_classes=model_args[name]["model_args"]["red_n_class"], 
+                                           test_list=test_list)
         if args.split_time != 0:
-            red_test_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "red", args.cq, 1, args.split_time, model=args.model, num_classes=model_args[name]["model_args"]["red_n_class"], test_list=test_list)
+            red_test_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "red", args.cq, 1, 
+                                              args.split_time, model=args.model, num_classes=model_args[name]["model_args"]["red_n_class"], 
+                                              test_list=test_list)
         if name not in ["kl8"]:
-            blue_train_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "blue", args.cq, 0, args.split_time, model=args.model, num_classes=model_args[name]["model_args"]["blue_n_class"], test_list=test_list)
+            blue_train_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "blue", args.cq, 0, 
+                                                args.split_time, model=args.model, num_classes=model_args[name]["model_args"]["blue_n_class"], 
+                                                test_list=test_list)
             if args.split_time != 0:
-                blue_test_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "blue", args.cq, 1, args.split_time, model=args.model, num_classes=model_args[name]["model_args"]["blue_n_class"], test_list=test_list)
+                blue_test_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "blue", args.cq, 1, 
+                                                   args.split_time, model=args.model, num_classes=model_args[name]["model_args"]["blue_n_class"], 
+                                                   test_list=test_list)
         if sub_name_eng == "red":
             dataset = red_train_data
             test_dataset = red_test_data
         elif sub_name_eng == "blue":
             dataset = blue_train_data
             test_dataset = blue_test_data
-    dataloader = DataLoaderX(dataset, batch_size=model_args[args.name]["model_args"]["batch_size"], shuffle=False, num_workers=args.num_workers, pin_memory=True)
-    test_dataloader = DataLoaderX(test_dataset, batch_size=model_args[args.name]["model_args"]["batch_size"], shuffle=False, num_workers=args.num_workers, pin_memory=True)
+    dataloader = DataLoaderX(dataset, batch_size=model_args[args.name]["model_args"]["batch_size"], shuffle=False, 
+                             num_workers=args.num_workers, pin_memory=True)
+    test_dataloader = DataLoaderX(test_dataset, batch_size=model_args[args.name]["model_args"]["batch_size"], shuffle=False, 
+                                  num_workers=args.num_workers, pin_memory=True)
     if args.init == 1:
         current_epoch = 0
         no_update_times = 0
         scaler = GradScaler()
         optimizer = optim.Adam(model.parameters(), lr=args.lr)
-        lr_scheduler = modeling.CustomSchedule(optimizer=optimizer, d_model=args.hidden_size, warmup_steps=model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]*0.2)   
+        lr_scheduler = modeling.CustomSchedule(optimizer=optimizer, d_model=args.hidden_size, 
+                                               warmup_steps=model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]*0.2)   
     logger.info("当前epoch是 {}, 初次启动时间是 {}, 最佳分数是 {:.2e}, 最佳损失是 {:.2e}".format(current_epoch, start_dt, best_score, best_loss))
-    pbar = tqdm(range(model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]), ncols=200)
+    pbar = tqdm(range(model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]))
     running_loss = 0.0
     running_times = 0
     test_loss = 0.0
@@ -257,7 +300,8 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
         if no_update_times > args.ext_times and args.plus_mode == 1:
             print()
             no_update_times = 0
-            _, _, _, _ = load_model(m_args, syspath, sub_name_eng, model, optimizer, lr_scheduler, scaler, sub_name, other="_{}_{}".format(start_dt, "best_test"))
+            _, _, _, _ = load_model(m_args, syspath, sub_name_eng, model, optimizer, lr_scheduler, scaler, sub_name, 
+                                    other="_{}_{}".format(start_dt, "best_test"))
         if epoch == current_epoch:
             pbar.update(current_epoch)
         running_loss = 0.0
@@ -270,7 +314,8 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
             y = y.float().to(device)
             optimizer.zero_grad()
             with autocast():
-                y_pred = model(x).view(-1, m_args["model_args"]["{}_sequence_len".format(sub_name_eng)], m_args["model_args"]["{}_n_class".format(sub_name_eng)])
+                y_pred = model(x).view(-1, m_args["model_args"]["{}_sequence_len".format(sub_name_eng)], 
+                                       m_args["model_args"]["{}_n_class".format(sub_name_eng)])
                 t_loss = criterion(y_pred.transpose(1,2), y.long().view(y.size(0), -1))
             scaler.scale(t_loss).backward()
             scaler.step(optimizer)
@@ -304,7 +349,8 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
                         x = x.float().to(device)
                         y = y.float().to(device)
                         with autocast():
-                            y_pred = model(x).view(-1, m_args["model_args"]["{}_sequence_len".format(sub_name_eng)], m_args["model_args"]["{}_n_class".format(sub_name_eng)])
+                            y_pred = model(x).view(-1, m_args["model_args"]["{}_sequence_len".format(sub_name_eng)], 
+                                                   m_args["model_args"]["{}_n_class".format(sub_name_eng)])
                             # _, targets = torch.squeeze(y, 1).max(dim=1)
                             tt_loss = criterion(y_pred.transpose(1,2), y.long().view(y.size(0), -1)) 
                             # tt_loss = criterion(y_pred, torch.squeeze(y, 1))
@@ -327,7 +373,8 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
                         elif args.model == "LSTM":
                             for i in range(x.size(0)):
                                 softmax = nn.Softmax(dim=1)
-                                _ele = modeling.decode_one_hot(softmax(y_pred[i]), sort_by_max_value=True, num_classes=m_args["model_args"]["{}_n_class".format(sub_name_eng)])
+                                _ele = modeling.decode_one_hot(softmax(y_pred[i]), sort_by_max_value=True, 
+                                                               num_classes=m_args["model_args"]["{}_n_class".format(sub_name_eng)])
                                 topk_times += args.top_k
                                 top_times += m_args["model_args"]["{}_sequence_len".format(sub_name_eng)]
                                 # target_indices = y[i].nonzero(as_tuple=False).squeeze()
@@ -346,26 +393,47 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
                 if top_loss < best_score:
                     no_update_times = 0
                     best_score = top_loss
-                    save_model(model, optimizer, lr_scheduler, scaler, epoch, syspath, ball_model_name, other="_{}_{}".format(start_dt, "best_test"), no_update_times=no_update_times)
+                    save_model(model, optimizer, lr_scheduler, scaler, epoch, syspath, ball_model_name, 
+                               other="_{}_{}".format(start_dt, "best_test"), no_update_times=no_update_times)
                 if topk_loss < best_score:
                     no_update_times = 0
                     best_score = topk_loss
-                    save_model(model, optimizer, lr_scheduler, scaler, epoch, syspath, ball_model_name, other="_{}_{}".format(start_dt, "best_test"), no_update_times=no_update_times)
-            if args.save_best_loss > 0 and best_loss > test_loss / (test_times if test_times > 0 else 1):
-                best_loss = test_loss / (test_times if test_times > 0 else 1)
-                save_model(model, optimizer, lr_scheduler, scaler, epoch, syspath, ball_model_name, other="_{}_{}".format(start_dt, "best_loss"), no_update_times=no_update_times)
+                    save_model(model, optimizer, lr_scheduler, scaler, epoch, syspath, ball_model_name, 
+                               other="_{}_{}".format(start_dt, "best_test"), no_update_times=no_update_times)
+            if args.save_best_loss > 0 and best_loss > running_loss / (running_times if running_times > 0 else 1):
+                best_loss = running_loss / (running_times if running_times > 0 else 1)
+                save_model(model, optimizer, lr_scheduler, scaler, epoch, syspath, ball_model_name, 
+                           other="_{}_{}".format(start_dt, "best_loss"), no_update_times=no_update_times)
         if args.tensorboard == 1:
             writer.add_scalar('Loss/Running', running_loss / (running_times if running_times > 0 else 1), epoch)
             if (epoch + 1) % save_epoch == 0:
                 writer.add_scalar('Loss/Test', test_loss / (test_times if test_times > 0 else 1), epoch)
                 writer.add_scalar('Loss/TopK{}'.format(args.top_k), topk_loss, epoch)
                 writer.add_scalar('Loss/Top', top_loss, epoch)
-        pbar.set_description("AL:{:.2e} TL:{:.2e} BL:{:.2e} KL{}:{:.2e} KL:{:.2e} LR:{:.2e} HS:{:.2e}".format(running_loss / (running_times if running_times > 0 else 1), test_loss / (test_times if test_times > 0 else 1), best_loss, args.top_k, topk_loss, top_loss, optimizer.param_groups[0]['lr'], best_score))
+        pbar.set_description("AL:{:.2e} TL:{:.2e} BL:{:.2e} KL{}:{:.2e} KL:{:.2e} LR:{:.2e} HS:{:.2e}".format(
+                            running_loss / (running_times if running_times > 0 else 1), 
+                            test_loss / (test_times if test_times > 0 else 1), 
+                            best_loss, 
+                            args.top_k, 
+                            topk_loss, 
+                            top_loss, 
+                            optimizer.param_groups[0]['lr'], 
+                            best_score
+                            ))
         pbar.update(1)
     if args.tensorboard == 1:
         writer.close()
     save_model(model, optimizer, lr_scheduler, scaler, epoch, syspath, ball_model_name, other="_{}".format(start_dt), no_update_times=no_update_times)
-    pbar.set_description("AL:{:.2e} TL:{:.2e} BL:{:.2e} KL{}:{:.2e} KL:{:.2e} LR:{:.2e} HS:{:.2e}".format(running_loss / (running_times if running_times > 0 else 1), test_loss / (test_times if test_times > 0 else 1), best_loss, args.top_k, topk_loss, top_loss, optimizer.param_groups[0]['lr'], best_score))
+    pbar.set_description("AL:{:.2e} TL:{:.2e} BL:{:.2e} KL{}:{:.2e} KL:{:.2e} LR:{:.2e} HS:{:.2e}".format(
+                        running_loss / (running_times if running_times > 0 else 1), 
+                        test_loss / (test_times if test_times > 0 else 1), 
+                        best_loss, 
+                        args.top_k, 
+                        topk_loss, 
+                        top_loss, 
+                        optimizer.param_groups[0]['lr'], 
+                        best_score
+                        ))
     pbar.close()
     print()
     logger.info("【{}】{}模型训练完成!".format(name_path[name]["name"], sub_name))
@@ -393,13 +461,21 @@ def action(name):
             for item in range(int(ori_data[ori_data['期数'] == test_list[0]]['Unnamed: 0']) - 1, int(ori_data[ori_data['期数'] == test_list[0]]['Unnamed: 0']) - _n_samples, -1):
                 test_list.append(int(ori_data[ori_data['Unnamed: 0'] == item]['期数']))
     # name, windows, dataset=0, ball_type="red", cq=0, test_flag=0, test_begin=2021351, f_data=0, model="Transformer"
-    red_train_data = create_train_data(name=args.name, windows=model_args[name]["model_args"]["windows_size"], dataset=1, ball_type="red", cq=args.cq, test_flag=0, test_begin=args.split_time, f_data=0, model=args.model, num_classes=model_args[name]["model_args"]["red_n_class"], test_list=test_list)
+    red_train_data = create_train_data(name=args.name, windows=model_args[name]["model_args"]["windows_size"], 
+                                       dataset=1, ball_type="red", cq=args.cq, test_flag=0, test_begin=args.split_time, 
+                                       f_data=0, model=args.model, num_classes=model_args[name]["model_args"]["red_n_class"], test_list=test_list)
     if args.split_time != 0:
-        red_test_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "red", args.cq, 1, args.split_time, model=args.model, num_classes=model_args[name]["model_args"]["red_n_class"], test_list=test_list)
+        red_test_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "red", 
+                                          args.cq, 1, args.split_time, model=args.model, num_classes=model_args[name]["model_args"]["red_n_class"], 
+                                          test_list=test_list)
     if name not in ["kl8"]:
-        blue_train_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "blue", args.cq, 0, args.split_time, model=args.model, num_classes=model_args[name]["model_args"]["blue_n_class"], test_list=test_list)
+        blue_train_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "blue", 
+                                            args.cq, 0, args.split_time, model=args.model, num_classes=model_args[name]["model_args"]["blue_n_class"], 
+                                            test_list=test_list)
         if args.split_time != 0:
-            blue_test_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "blue", args.cq, 1, args.split_time, model=args.model, num_classes=model_args[name]["model_args"]["blue_n_class"], test_list=test_list)
+            blue_test_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "blue", 
+                                               args.cq, 1, args.split_time, model=args.model, num_classes=model_args[name]["model_args"]["blue_n_class"], 
+                                               test_list=test_list)
     for i in range(args.epochs):
         if model_args[name]["model_args"]["red_epochs"] > 0:
             best_score = 999999999
