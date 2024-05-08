@@ -526,15 +526,18 @@ def write_strings_to_file(folder, strings):
     current_datetime = datetime.datetime.now()
 
     # Format the current date and time as a string
-    datetime_string = current_datetime.strftime('%Y%m%d%H%M%S')
+    datetime_string = current_datetime.strftime('%Y%m%d')
 
     # Create the file path
     file_path = os.path.join(folder, datetime_string + '.txt')
 
     # Open the file in append mode and write the strings
     with open(file_path, 'a') as file:
+        file.write('---------------pridict time: {}---------------\n'.format(datetime_string))
         for string in strings:
             file.write(string + '\n')
+        file.write('\n')
+    file.close()
 
 # if __name__ == "__main__":
 #     spider_cq("kl8", "20180101", "20180110", "train")
