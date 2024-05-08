@@ -394,6 +394,7 @@ def run_predict(window_size, sequence_len, hidden_size=128, num_layers=8, num_he
             correct_nums = 0
             total_nums = 0
             result_strings = []
+            result_strings.append("------------Predict Datetime: {}------------".format(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
             if model == "Transformer":
                 y_pred_list = modeling.binary_decode_array(y_pred, threshold=0.25, top_k=model_args[mini_args.name]["model_args"]["{}_n_class".format(sub_name_eng)])
                 for row in y_pred_list:
@@ -427,6 +428,7 @@ def run_predict(window_size, sequence_len, hidden_size=128, num_layers=8, num_he
             if test_mode != 0 and f_data > 0:
                 logger.info("预测{}结果为: {:.2f}%".format(sub_name, correct_nums / (total_nums if total_nums > 0 else 1) * 100))
                 result_strings.append("预测{}结果为: {:.2f}%".format(sub_name, correct_nums / (total_nums if total_nums > 0 else 1) * 100))
+            result_strings.append("------------------------------------------------")
             write_strings_to_file(result_path, result_strings)
         else:
             logger.warning("抱歉，没有找到{}模型！".format(sub_name))
@@ -533,7 +535,6 @@ def write_strings_to_file(folder, strings):
 
     # Open the file in append mode and write the strings
     with open(file_path, 'a') as file:
-        file.write('---------------pridict time: {}---------------\n'.format(datetime_string))
         for string in strings:
             file.write(string + '\n')
         file.write('\n')
