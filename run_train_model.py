@@ -243,7 +243,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
         optimizer = optim.Adam(model.parameters(), lr=args.lr)
         lr_scheduler = modeling.CustomSchedule(optimizer=optimizer, d_model=args.hidden_size, warmup_steps=model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]*0.2)   
     logger.info("当前epoch是 {}, 初次启动时间是 {}, 最佳分数是 {:.2e}, 最佳损失是 {:.2e}".format(current_epoch, start_dt, best_score, best_loss))
-    pbar = tqdm(range(model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]), ncols=150)
+    pbar = tqdm(range(model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]), ncols=200)
     running_loss = 0.0
     running_times = 0
     test_loss = 0.0
@@ -359,12 +359,12 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
                 writer.add_scalar('Loss/Test', test_loss / (test_times if test_times > 0 else 1), epoch)
                 writer.add_scalar('Loss/TopK{}'.format(args.top_k), topk_loss, epoch)
                 writer.add_scalar('Loss/Top', top_loss, epoch)
-        pbar.set_description("AL:{:.2e} TL:{:.2e} KL{}:{:.2e} KL:{:.2e} lr:{:.2e} hs:{:.2e}".format(running_loss / (running_times if running_times > 0 else 1), test_loss / (test_times if test_times > 0 else 1), args.top_k, topk_loss, top_loss, optimizer.param_groups[0]['lr'], best_score))
+        pbar.set_description("AL:{:.2e} TL:{:.2e} BL:{:.2e} KL{}:{:.2e} KL:{:.2e} LR:{:.2e} HS:{:.2e}".format(running_loss / (running_times if running_times > 0 else 1), test_loss / (test_times if test_times > 0 else 1), best_loss, args.top_k, topk_loss, top_loss, optimizer.param_groups[0]['lr'], best_score))
         pbar.update(1)
     if args.tensorboard == 1:
         writer.close()
     save_model(model, optimizer, lr_scheduler, scaler, epoch, syspath, ball_model_name, other="_{}".format(start_dt), no_update_times=no_update_times)
-    pbar.set_description("AL:{:.2e} TL:{:.2e} KL{}:{:.2e} KL:{:.2e} lr:{:.2e} hs:{:.2e}".format(running_loss / (running_times if running_times > 0 else 1), test_loss / (test_times if test_times > 0 else 1), args.top_k, topk_loss, top_loss, optimizer.param_groups[0]['lr'], best_score))
+    pbar.set_description("AL:{:.2e} TL:{:.2e} BL:{:.2e} KL{}:{:.2e} KL:{:.2e} LR:{:.2e} HS:{:.2e}".format(running_loss / (running_times if running_times > 0 else 1), test_loss / (test_times if test_times > 0 else 1), best_loss, args.top_k, topk_loss, top_loss, optimizer.param_groups[0]['lr'], best_score))
     pbar.close()
     print()
     logger.info("【{}】{}模型训练完成!".format(name_path[name]["name"], sub_name))
