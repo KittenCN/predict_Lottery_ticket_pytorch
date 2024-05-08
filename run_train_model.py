@@ -352,6 +352,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
                     best_score = topk_loss
                     save_model(model, optimizer, lr_scheduler, scaler, epoch, syspath, ball_model_name, other="_{}_{}".format(start_dt, "best_test"), no_update_times=no_update_times)
             if args.save_best_loss > 0 and best_loss > test_loss / (test_times if test_times > 0 else 1):
+                best_loss = test_loss / (test_times if test_times > 0 else 1)
                 save_model(model, optimizer, lr_scheduler, scaler, epoch, syspath, ball_model_name, other="_{}_{}".format(start_dt, "best_loss"), no_update_times=no_update_times)
         if args.tensorboard == 1:
             writer.add_scalar('Loss/Running', running_loss / (running_times if running_times > 0 else 1), epoch)
