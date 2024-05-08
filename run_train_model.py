@@ -242,7 +242,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
         scaler = GradScaler()
         optimizer = optim.Adam(model.parameters(), lr=args.lr)
         lr_scheduler = modeling.CustomSchedule(optimizer=optimizer, d_model=args.hidden_size, warmup_steps=model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]*0.2)   
-    logger.info("当前epoch是 {}, 初次启动时间是 {}, 最佳分数是 {:.2e}".format(current_epoch, start_dt, best_score))
+    logger.info("当前epoch是 {}, 初次启动时间是 {}, 最佳分数是 {:.2e}, 最佳损失是 {:.2e}".format(current_epoch, start_dt, best_score, best_loss))
     pbar = tqdm(range(model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]), ncols=150)
     running_loss = 0.0
     running_times = 0
