@@ -54,7 +54,7 @@ os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 pred_key = {}
-save_epoch = 100
+save_epoch = 5
 save_interval = 60
 last_save_time = time.time()
 best_score = 999999999
@@ -237,8 +237,8 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
                 logger.info("模型没有最优版本，将读取最后版本继续训练！")
             else:
                 newest_file = os.path.basename(max(_files, key=os.path.getmtime)).split('_')
-                if len(newest_file) == 7:
-                    _other = '_' + newest_file[-2] + '_' + newest_file[-1].split('.')[0]
+                if len(newest_file) == 8:
+                    _other = '_' + newest_file[-3] +'_' + newest_file[-2] + '_' + newest_file[-1].split('.')[0]
                     logger.info("模型最优版本是：{}， 系统将尝试读取...".format(os.path.basename(max(_files, key=os.path.getmtime))),)
                 else:
                     logger.info("模型没有最优版本，将读取最后版本继续训练！")
