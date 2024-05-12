@@ -300,8 +300,12 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
         if no_update_times > args.ext_times and args.plus_mode == 1:
             print()
             no_update_times = 0
-            _, _, _, _ = load_model(m_args, syspath, sub_name_eng, model, optimizer, lr_scheduler, scaler, sub_name, 
-                                    other="_{}_{}".format(start_dt, "best_test"))
+            if args.save_best_loss == 0:
+                _, _, _, _ = load_model(m_args, syspath, sub_name_eng, model, optimizer, lr_scheduler, scaler, sub_name, 
+                                        other="_{}_{}".format(start_dt, "best_test"))
+            else:
+                _, _, _, _ = load_model(m_args, syspath, sub_name_eng, model, optimizer, lr_scheduler, scaler, sub_name, 
+                                        other="_{}_{}".format(start_dt, "best_loss"))
         if epoch == current_epoch:
             pbar.update(current_epoch)
         running_loss = 0.0
