@@ -165,8 +165,6 @@ def load_model(m_args, syspath, sub_name_eng, model, optimizer, lr_scheduler, sc
                 split_time = checkpoint['split_time']
             if 'test_list' in checkpoint:
                 _test_list = checkpoint['test_list']
-            if 'best_lost' in checkpoint:
-                best_loss = checkpoint['best_lost']
             if split_time < 0 and len(_test_list) <= 0:
                 logger.warning("测试数据集丢失，请重新训练！")
                 sys.exit()
@@ -174,6 +172,8 @@ def load_model(m_args, syspath, sub_name_eng, model, optimizer, lr_scheduler, sc
             start_dt = checkpoint['start_dt']
         if 'best_score' in checkpoint:
             best_score = checkpoint['best_score']
+        if 'best_lost' in checkpoint:
+                best_loss = checkpoint['best_lost']
         logger.info("已加载{}模型！".format(sub_name))
     else:
         logger.info("没有找到{}模型，将重新训练！".format(sub_name))
