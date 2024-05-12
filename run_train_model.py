@@ -54,7 +54,7 @@ os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 pred_key = {}
-save_epoch = 5
+save_epoch = 50
 save_interval = 60
 last_save_time = time.time()
 best_score = 999999999
@@ -331,7 +331,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
             if time.time() - last_save_time > save_interval:
                 last_save_time = time.time()
                 save_model(model, optimizer, lr_scheduler, scaler, epoch, syspath, ball_model_name, no_update_times=no_update_times)
-            if args.split_time != 0:
+            if args.split_time != 0 and test_dataset is not None and  test_dataset.__len__() > 0:
                 # run test
                 model.eval()
                 with torch.no_grad():
