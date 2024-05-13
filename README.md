@@ -1,3 +1,6 @@
+# `彩票理论上属于完全随机事件，任何一种单一算法，都不可能精确的预测彩票结果！！`  
+# `请合理投资博彩行业，切勿成迷！！`  
+--
 基于transformer模型的彩票预测
 源自我另一个项目[基于tensorflow lstm模型的彩票预测](https://github.com/KittenCN/predict_Lottery_ticket),按照transformer的特性重构了所有关键代码
 目前进度：
