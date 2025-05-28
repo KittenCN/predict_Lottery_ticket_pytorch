@@ -43,7 +43,10 @@ model_path = os.getcwd() + "/model/"
 model_args = {
     "kl8": {
         "model_args": {
-            "windows_size": 3,
+            "windows_size": 3,  # 滑动窗口大小
+            "hot_window": 50,  # 过去n期的热度窗口
+            "decay_alpha": 0.05,  # 热度衰减系数
+            "trend_window": 50,  # 趋势窗口
             "batch_size": 1,
             "red_sequence_len": 20,
             "sequence_len": 20,

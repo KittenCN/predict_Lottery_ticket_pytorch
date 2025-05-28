@@ -106,9 +106,9 @@ def create_train_data(name, windows, dataset=0, ball_type="red", cq=0, test_flag
         }
     else:
         if ball_type == "red":
-            dataset = modeling.MyDataset(data, windows, cut_num, model, num_classes, test_flag, test_list, f_data)
+            dataset = modeling.MyDataset(data, windows, cut_num, model, num_classes, test_flag, test_list, f_data, model_args, mini_args)
         else:
-            dataset = modeling.MyDataset(data, windows, cut_num * -1, model, num_classes, test_flag, test_list, f_data)
+            dataset = modeling.MyDataset(data, windows, cut_num * -1, model, num_classes, test_flag, test_list, f_data, model_args, mini_args)
         logger.info(strball + strflag + "集数据维度: {}".format(dataset.data.shape))
         return dataset
 

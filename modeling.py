@@ -268,11 +268,32 @@ class CustomSchedule(_LRScheduler):
 
 # 定义数据集类
 class MyDataset(Dataset):
-    def __init__(self, data, windows, cut_num, model='Transformer', num_classes=80, test_flag=0, test_list=[], f_data=0):
+    def __init__(self, data, windows, cut_num, model='Transformer', num_classes=80, test_flag=0, test_list=[], f_data=0, model_args=None, mini_args=None):
         tmp = []
+        if test_list is None:
+            test_list = []
+        self.model = model
+        self.num_classes = num_classes
+        self.test_flag = test_flag
+        self.f_data = f_data
+        self.cut_num = cut_num
+        self.test_list = test_list
+
+        # 从config中获取超参
+        if mini_args is not None and model_args is not None:
+            name  = mini_args.name
+            params = model_args[name]
+            hot_window = params.get('hot_window', 50)
+            decay_alpha = params.get('decay_alpha', 0.05)
+            trend_window = params.get('trend_window', 50)
+        else:
+            hot_window = 50
+            decay_alpha = 0.05
+            trend_window = 50
+
         # if test_flag == 2 and f_data == 0:
         #     windows = windows - 1
-        pbar = tqdm(total=len(data) - windows)
+        pbar = tqdm(total=len(data) - windows, desc="Building dataset")
         for i in range(len(data) - windows):
             pbar.update(1)
             if cut_num > 0:
@@ -309,6 +330,32 @@ class MyDataset(Dataset):
                                                 self.standardize(min_val), self.standardize(mean_val), \
                                                 self.standardize(median_val), self.standardize(std_val), \
                                                 self.standardize(skewness_val), self.standardize(kurtosis_val)))
+                        # —— 新增：领域感知特征 —— 
+                        # 1. 号码热度（过去 hot_window 期出现频率）
+                        start_idx = max(0, i - hot_window)
+                        hist = data[start_idx:i, 2:cut_num+2].astype(int).flatten()
+                        hotness = np.bincount(hist-1, minlength=num_classes) / hot_window
+
+                        # 2. 冷号衰减（距上次出现期数的指数衰减）
+                        last_pos = {
+                            n: (hot_window if n not in hist
+                                else (hot_window - np.max(np.where(hist==n)[0])))
+                            for n in range(1, num_classes+1)
+                        }
+                        decay = np.array([
+                            np.exp(-decay_alpha * last_pos[n])
+                            for n in range(1, num_classes+1)
+                        ])
+
+                        # 3. 趋势指数（近期 trend_window 期热度的 z-score）
+                        trend_hist = data[max(0, i-trend_window):i, 2:cut_num+2].astype(int).flatten()
+                        freq = np.bincount(trend_hist-1, minlength=num_classes)
+                        mu, sigma = freq.mean(), freq.std() + 1e-8
+                        trend_idx = (freq - mu) / sigma
+
+                        domain_feats = np.hstack((hotness, decay, trend_idx))
+                        # —— 领域特征拼接结束 —— 
+                        features = np.hstack((features, domain_feats))
                         _tmp = np.concatenate((item, features))
                         temp_item.append(_tmp)
                     tmp.append(temp_item)
@@ -346,16 +393,37 @@ class MyDataset(Dataset):
                                                 self.standardize(min_val), self.standardize(mean_val), \
                                                 self.standardize(median_val), self.standardize(std_val), \
                                                 self.standardize(skewness_val), self.standardize(kurtosis_val)))
+                        # —— 新增：领域感知特征 —— 
+                        # 1. 号码热度（过去 hot_window 期出现频率）
+                        start_idx = max(0, i - hot_window)
+                        hist = data[start_idx:i, 2:cut_num+2].astype(int).flatten()
+                        hotness = np.bincount(hist-1, minlength=num_classes) / hot_window
+
+                        # 2. 冷号衰减（距上次出现期数的指数衰减）
+                        last_pos = {
+                            n: (hot_window if n not in hist
+                                else (hot_window - np.max(np.where(hist==n)[0])))
+                            for n in range(1, num_classes+1)
+                        }
+                        decay = np.array([
+                            np.exp(-decay_alpha * last_pos[n])
+                            for n in range(1, num_classes+1)
+                        ])
+
+                        # 3. 趋势指数（近期 trend_window 期热度的 z-score）
+                        trend_hist = data[max(0, i-trend_window):i, 2:cut_num+2].astype(int).flatten()
+                        freq = np.bincount(trend_hist-1, minlength=num_classes)
+                        mu, sigma = freq.mean(), freq.std() + 1e-8
+                        trend_idx = (freq - mu) / sigma
+
+                        domain_feats = np.hstack((hotness, decay, trend_idx))
+                        # —— 领域特征拼接结束 —— 
+                        features = np.hstack((features, domain_feats))
                         _tmp = np.concatenate((item, features))
                         temp_item.append(_tmp)
                     tmp.append(temp_item)
         pbar.close()
         self.data = np.array(tmp)
-        self.model = model
-        self.num_classes = num_classes
-        self.test_flag = test_flag
-        self.f_data = f_data
-        self.cut_num = cut_num
     
     def __len__(self):
         return len(self.data) - 1
