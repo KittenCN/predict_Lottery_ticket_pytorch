@@ -14,7 +14,7 @@ import sys
 import glob
 import pandas as pd
 from torch.utils.data import DataLoader
-from common import create_train_data, get_data_run
+from common import create_train_data, get_data_run, setMiniargs
 from tqdm import tqdm
 from config import *
 from loguru import logger
@@ -518,6 +518,7 @@ if __name__ == '__main__':
     elif not args.windows_size:
         raise Exception("窗口大小不能为空！")
     else:
+        setMiniargs(args)
         if args.download_data == 1 and args.predict_pro == 0 and int(time.strftime("%H", time.localtime())) < 20:
             logger.info("正在创建【{}】数据集...".format(name_path[args.name]["name"]))
             get_data_run(name=args.name, cq=args.cq)

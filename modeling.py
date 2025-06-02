@@ -280,7 +280,7 @@ class MyDataset(Dataset):
         self.test_list = test_list
 
         # 从config中获取超参
-        if mini_args is not None and model_args is not None:
+        if (mini_args is not None) and (model_args is not None and len(model_args) > 0):
             name  = mini_args.name
             params = model_args[name]
             hot_window = params.get('hot_window', 50)
