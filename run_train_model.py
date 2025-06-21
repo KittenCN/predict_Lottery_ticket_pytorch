@@ -100,7 +100,7 @@ def save_model(model, optimizer, lr_scheduler, scaler, epoch, syspath, ball_mode
         'no_update_times': no_update_times,
         'split_time': args.split_time,
         'test_list': test_list,
-        'best_lost': best_loss,
+        'best_loss': best_loss,
     }
     torch.save(save_dict, "{}{}_pytorch_{}{}.{}".format(syspath, ball_model_name, args.model, other, extension))
 
@@ -172,8 +172,8 @@ def load_model(m_args, syspath, sub_name_eng, model, optimizer, lr_scheduler, sc
             start_dt = checkpoint['start_dt']
         if 'best_score' in checkpoint:
             best_score = checkpoint['best_score']
-        if 'best_lost' in checkpoint:
-            best_loss = checkpoint['best_lost']
+        if 'best_loss' in checkpoint:
+            best_loss = checkpoint['best_loss']
         logger.info("已加载{}模型！".format(sub_name))
     else:
         logger.info("没有找到{}模型，将重新训练！".format(sub_name))
