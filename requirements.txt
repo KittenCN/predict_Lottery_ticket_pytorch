@@ -11,7 +11,7 @@ protobuf
 prefetch_generator
 scipy
 # for intel cpu
-intel_numpy
+# intel_numpy
 mkl
 # for other cpu
-# numpy
+numpy
