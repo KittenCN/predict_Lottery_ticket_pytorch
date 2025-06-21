@@ -284,7 +284,7 @@ class MyDataset(Dataset):
                         _tmp = []
                         item = item - 1
                         if i < windows:
-                            onsecutive_features = [0.0] * windows 
+                            consecutive_features = [0.0] * windows 
                             interval_features = [0.0] * windows 
                             # trend_features = self.calculate_trend_features(_item)
                             # frequency = list(self.calculate_frequency(_item).values())
@@ -295,7 +295,7 @@ class MyDataset(Dataset):
                         else:
                             _item = data[i-windows:i, 2:cut_num+2] - 1
                             _item = _item.reshape(windows,cut_num)
-                            onsecutive_features = self.calculate_consecutive_features(_item)
+                            consecutive_features = self.calculate_consecutive_features(_item)
                             interval_features = self.calculate_interval_features(_item)
                             # trend_features = self.calculate_trend_features(_item)
                             # frequency = list(self.calculate_frequency(_item).values())
@@ -303,7 +303,7 @@ class MyDataset(Dataset):
                             # cnt_combinations = self.count_combinations(_item)
                             prime_composite_ratio = self.calculate_prime_composite_ratio(_item)
                             max_val, min_val, mean_val, median_val, std_val, skewness_val, kurtosis_val = self.calculate_statistical_features(_item)
-                        features = np.hstack((self.standardize(onsecutive_features), self.standardize(interval_features),  \
+                        features = np.hstack((self.standardize(consecutive_features), self.standardize(interval_features),  \
                                                 self.standardize(odd_even_ratio), self.standardize(high_low_ratio), \
                                                 self.standardize(prime_composite_ratio), self.standardize(max_val), \
                                                 self.standardize(min_val), self.standardize(mean_val), \
@@ -321,7 +321,7 @@ class MyDataset(Dataset):
                         _tmp = []
                         item = item - 1
                         if i < windows:
-                            onsecutive_features = [0.0] * windows 
+                            consecutive_features = [0.0] * windows 
                             interval_features = [0.0] * windows 
                             # trend_features = self.calculate_trend_features(_item)
                             # frequency = list(self.calculate_frequency(_item).values())
@@ -332,7 +332,7 @@ class MyDataset(Dataset):
                         else:
                             _item = data[i-windows:i, cut_num*(-1)+2:] - 1
                             _item = _item.reshape(windows,cut_num)
-                            onsecutive_features = self.calculate_consecutive_features(_item)
+                            consecutive_features = self.calculate_consecutive_features(_item)
                             interval_features = self.calculate_interval_features(_item)
                             # trend_features = self.calculate_trend_features(_item)
                             # frequency = list(self.calculate_frequency(_item).values())
@@ -340,7 +340,7 @@ class MyDataset(Dataset):
                             # cnt_combinations = self.count_combinations(_item)
                             prime_composite_ratio = self.calculate_prime_composite_ratio(_item)
                             max_val, min_val, mean_val, median_val, std_val, skewness_val, kurtosis_val = self.calculate_statistical_features(_item)
-                        features = np.hstack((self.standardize(onsecutive_features), self.standardize(interval_features),  \
+                        features = np.hstack((self.standardize(consecutive_features), self.standardize(interval_features),  \
                                                 self.standardize(odd_even_ratio), self.standardize(high_low_ratio), \
                                                 self.standardize(prime_composite_ratio), self.standardize(max_val), \
                                                 self.standardize(min_val), self.standardize(mean_val), \
