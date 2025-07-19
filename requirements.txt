@@ -1,3 +1,4 @@
+torch
 pytorch-gpu
 pytorch-crf
 requests
@@ -10,8 +11,9 @@ grpcio
 protobuf
 prefetch_generator
 scipy
+tqdm
 # for intel cpu
-intel_numpy
+# intel_numpy
 mkl
 # for other cpu
-# numpy
+numpy
