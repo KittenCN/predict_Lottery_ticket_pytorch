@@ -323,7 +323,8 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
                 # y_pred = model(x).view(-1, m_args["model_args"]["{}_sequence_len".format(sub_name_eng)], 
                 #                        m_args["model_args"]["{}_n_class".format(sub_name_eng)])
                 y_pred = model(x)
-                t_loss = criterion(y_pred, y.squeeze(1))
+                y_pred = y_pred.view(y_pred.shape[0], -1, y_pred.shape[-1])
+                t_loss = criterion(y_pred, y)
             scaler.scale(t_loss).backward()
             scaler.step(optimizer)
             scaler.update()

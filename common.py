@@ -344,7 +344,7 @@ def predict_ball_model(name, dataset, sequence_len, sub_name="红球", window_si
         _model = modeling.Transformer_Model
     elif model_name == "LSTM":
         _model = modeling.LSTM_Model
-    model = _model(input_size=input_size, output_size=output_size, hidden_size=hidden_size, num_layers=num_layers, num_heads=num_heads, dropout=0.5, num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)], embedding_dim=embedding_dim, windows_size=window_size).to(device)
+    # model = _model(input_size=input_size, output_size=output_size, hidden_size=hidden_size, num_layers=num_layers, num_heads=num_heads, dropout=0.5, num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)], embedding_dim=embedding_dim, windows_size=window_size).to(device)
     if os.path.exists("{}{}_ball_model_pytorch_{}.ckpt".format(syspath, sub_name_eng, model_name)):
         # model.load_state_dict(torch.load("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)))
         checkpoint = torch.load("{}{}_ball_model_pytorch_{}.ckpt".format(syspath, sub_name_eng, model_name))
@@ -355,11 +355,54 @@ def predict_ball_model(name, dataset, sequence_len, sub_name="红球", window_si
                 args.hidden_size = checkpoint['hidden_size']
                 args.num_layers = checkpoint['num_layers']
                 args.num_heads = checkpoint['num_heads']
-                model = _model(input_size=input_size, output_size=output_size, hidden_size=hidden_size, num_layers=num_layers, num_heads=num_heads, dropout=0.5, num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)], embedding_dim=embedding_dim, windows_size=window_size).to(device)
+                # model = _model(input_size=input_size, \
+                #                 output_size=output_size, \
+                #                 hidden_size=hidden_size, \
+                #                 num_layers=num_layers, \
+                #                 num_heads=num_heads, \
+                #                 dropout=0.5, \
+                #                 num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)], \
+                #                 embedding_dim=embedding_dim, \
+                #                 windows_size=window_size).to(device)
+                if args.model == "Transformer":
+                    model = _model(input_size=int(args.windows_size)*int(args.hidden_size), 
+                                output_size=output_size, 
+                                hidden_size=int(args.hidden_size), 
+                                num_layers=int(args.num_layers), 
+                                num_heads=int(args.num_heads), 
+                                dropout=0.5).to(device)
+                elif args.model == "LSTM":
+                    model = _model(input_size=int(args.windows_size)*int(args.hidden_size), 
+                                output_size=output_size, 
+                                hidden_size=int(args.hidden_size), 
+                                num_layers=int(args.num_layers), 
+                                num_heads=int(args.num_heads), 
+                                dropout=0.5, 
+                                num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)], 
+                                embedding_dim=embedding_dim, 
+                                windows_size=int(args.windows_size)).to(device)
         else:
             logger.info("模型不是最新版本，建议重新训练！")
         model.load_state_dict(checkpoint['model_state_dict'])
         logger.info("已加载{}模型！".format(sub_name))
+    else:
+        if args.model == "Transformer":
+            model = _model(input_size=input_size, 
+                        output_size=output_size, 
+                        hidden_size=args.hidden_size, 
+                        num_layers=args.num_layers, 
+                        num_heads=args.num_heads, 
+                        dropout=0.5).to(device)
+        elif args.model == "LSTM":
+            model = _model(input_size=input_size, 
+                        output_size=output_size, 
+                        hidden_size=args.hidden_size, 
+                        num_layers=args.num_layers, 
+                        num_heads=args.num_heads, 
+                        dropout=0.5, 
+                        num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)], 
+                        embedding_dim=embedding_dim, 
+                        windows_size=int(args.windows_size)).to(device)
     model.eval()
     for batch in dataloader:
         x, y = batch
@@ -386,7 +429,20 @@ def run_predict(window_size, sequence_len, hidden_size=128, num_layers=8, num_he
             logger.info("【{}】最近一期:{}".format(name_path[mini_args.name]["name"], current_number))
             logger.info("正在创建【{}】数据集...".format(name_path[mini_args.name]["name"]))
             data = create_train_data(mini_args.name, model_args[mini_args.name]["model_args"]["windows_size"], 1, sub_name_eng, mini_args.cq,f_data=f_data, model=model, test_flag=2)
-            y_pred, name_list, y_target = predict_ball_model(mini_args.name, data, sequence_len, sub_name, window_size,hidden_size=hidden_size, num_layers=num_layers, num_heads=num_heads, input_size=input_size, output_size=output_size, model_name=model, args=args,embedding_dim=50)
+            # name, dataset, sequence_len, sub_name="红球", window_size=1, hidden_size=128, num_layers=8, num_heads=16, input_size=20, output_size=20, model_name="Transformer", args=None, device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),embedding_dim=50
+            y_pred, name_list, y_target = predict_ball_model(name=mini_args.name, \
+                                                                dataset=data, \
+                                                                sequence_len=sequence_len, \
+                                                                sub_name=sub_name, \
+                                                                window_size=window_size, \
+                                                                hidden_size=hidden_size, \
+                                                                num_layers=num_layers, \
+                                                                num_heads=num_heads, \
+                                                                input_size=input_size, \
+                                                                output_size=output_size, \
+                                                                model_name=model, \
+                                                                args=args, \
+                                                                embedding_dim=50)
             if test_mode == 0 or f_data == 0:
                 logger.info("预测{}结果为: \n".format(sub_name))
             else:
