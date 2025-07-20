@@ -1,4 +1,5 @@
 torch
+tensorboard
 pytorch-gpu
 pytorch-crf
 requests

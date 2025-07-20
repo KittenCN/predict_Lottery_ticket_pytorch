@@ -20,7 +20,7 @@ from config import *
 from loguru import logger
 from datetime import datetime as dt
 from prefetch_generator import BackgroundGenerator
-from torch.cuda.amp import GradScaler, autocast
+from torch.amp import GradScaler, autocast
 from torch.utils.tensorboard import SummaryWriter   # to print to tensorboard
 
 parser = argparse.ArgumentParser()
@@ -196,8 +196,9 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
         os.makedirs(syspath)
     logger.info("标签数据维度: {}".format(dataset.data.shape))
     # 定义模型和优化器
+    args.hidden_size = m_args["model_args"]["{}_n_class".format(sub_name_eng)]
     if args.model == "Transformer":
-        model = _model(input_size=m_args["model_args"]["{}_n_class".format(sub_name_eng)]*m_args["model_args"]["windows_size"], 
+        model = _model(input_size=(m_args["model_args"]["{}_n_class".format(sub_name_eng)])*m_args["model_args"]["windows_size"], 
                        output_size=m_args["model_args"]["{}_n_class".format(sub_name_eng)], 
                        hidden_size=args.hidden_size, 
                        num_layers=args.num_layers, 
@@ -216,7 +217,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     # criterion = nn.MSELoss()
     # criterion = nn.BCEWithLogitsLoss() # 二分类交叉熵
     # criterion = nn.BCELoss() # 二分类交叉熵
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.BCEWithLogitsLoss()
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
     # lr_scheduler=modeling.CustomSchedule(d_model=args.hidden_size, optimizer=optimizer)
     lr_scheduler = modeling.CustomSchedule(optimizer=optimizer, 
@@ -226,7 +227,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     no_update_times = 0
     split_time = args.split_time
     _other = ""
-    scaler = GradScaler()
+    scaler = GradScaler('cuda')
     if args.train_mode != 1:
         if args.train_mode in [2, 3]:
             if args.train_mode == 2:
@@ -281,7 +282,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     if args.init == 1:
         current_epoch = 0
         no_update_times = 0
-        scaler = GradScaler()
+        scaler = GradScaler('cuda')
         optimizer = optim.Adam(model.parameters(), lr=args.lr)
         lr_scheduler = modeling.CustomSchedule(optimizer=optimizer, d_model=args.hidden_size, 
                                                warmup_steps=model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]*0.2)   
@@ -317,10 +318,12 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
             x = x.float().to(device)
             y = y.float().to(device)
             optimizer.zero_grad()
-            with autocast():
-                y_pred = model(x).view(-1, m_args["model_args"]["{}_sequence_len".format(sub_name_eng)], 
-                                       m_args["model_args"]["{}_n_class".format(sub_name_eng)])
-                t_loss = criterion(y_pred.transpose(1,2), y.long().view(y.size(0), -1))
+            with autocast('cuda'):
+                # shape '[-1, 20, 80]' is invalid for input of size 2560
+                # y_pred = model(x).view(-1, m_args["model_args"]["{}_sequence_len".format(sub_name_eng)], 
+                #                        m_args["model_args"]["{}_n_class".format(sub_name_eng)])
+                y_pred = model(x)
+                t_loss = criterion(y_pred, y.squeeze(1))
             scaler.scale(t_loss).backward()
             scaler.step(optimizer)
             scaler.update()
@@ -352,12 +355,12 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
                         x, y = batch
                         x = x.float().to(device)
                         y = y.float().to(device)
-                        with autocast():
-                            y_pred = model(x).view(-1, m_args["model_args"]["{}_sequence_len".format(sub_name_eng)], 
-                                                   m_args["model_args"]["{}_n_class".format(sub_name_eng)])
-                            # _, targets = torch.squeeze(y, 1).max(dim=1)
-                            tt_loss = criterion(y_pred.transpose(1,2), y.long().view(y.size(0), -1)) 
-                            # tt_loss = criterion(y_pred, torch.squeeze(y, 1))
+                        with autocast('cuda'):
+                            # shape '[-1, 20, 80]' is invalid for input of size 2560
+                            # y_pred = model(x).view(-1, m_args["model_args"]["{}_sequence_len".format(sub_name_eng)], 
+                            #                        m_args["model_args"]["{}_n_class".format(sub_name_eng)])
+                            y_pred = model(x)
+                            tt_loss = criterion(y_pred, y.squeeze(1))
                         # test_loss += tt_loss.item() * x.size(0)
                         test_loss += tt_loss.item()
                         # calculate topk loss

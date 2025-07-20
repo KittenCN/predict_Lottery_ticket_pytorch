@@ -15,6 +15,8 @@ from itertools import combinations
 from scipy.stats import linregress
 from tqdm import tqdm
 
+extra_classes = 0
+
 def binary_encode_array(input_array, num_classes=80):
     """
     Convert an input array of shape (windows_size, seq_len) to a binary encoded tensor of shape (windows_size, num_classes).
@@ -26,16 +28,29 @@ def binary_encode_array(input_array, num_classes=80):
     Returns:
     - A binary encoded tensor of shape (windows_size, num_classes).
     """
-    windows_size, seq_len = input_array.shape
-    # Initialize a tensor of zeros with the desired output shape
-    binary_encoded_array = torch.zeros((windows_size, num_classes), dtype=torch.float32)
+    if input_array.ndim == 1:
+        windows_size, seq_len = 1, input_array.shape[0]
+        # Initialize a tensor of zeros with the desired output shape
+        binary_encoded_array = torch.zeros((num_classes,), dtype=torch.float32)
+    elif input_array.ndim == 2:
+        windows_size, seq_len = input_array.shape
+        # Initialize a tensor of zeros with the desired output shape
+        binary_encoded_array = torch.zeros((windows_size, num_classes), dtype=torch.float32)
+    else:
+        raise ValueError("Input array must be 1D or 2D.")
     
     # Encode each number in the input_array
-    for i in range(windows_size):
+    if input_array.ndim == 2:
+        for i in range(windows_size):
+            for j in range(seq_len):
+                number = int(input_array[i, j])
+                if 1 <= number <= num_classes:
+                    binary_encoded_array[i, number] = 1.0  # Adjust index for 0-based indexing
+    elif input_array.ndim == 1:
         for j in range(seq_len):
-            number = input_array[i, j]
-            if 1 <= number <= num_classes:
-                binary_encoded_array[i, number - 1] = 1.0  # Adjust index for 0-based indexing
+            number = int(input_array[j])
+            if 0 <= number < num_classes:
+                binary_encoded_array[number] = 1.0
     
     return binary_encoded_array
 
@@ -54,15 +69,36 @@ def binary_decode_array(binary_encoded_data, threshold=0.25, top_k=20):
     """
     # sigmoid = torch.sigmoid(binary_encoded_data)  # Convert raw scores to probabilities
     sigmoid = binary_encoded_data
-    windows_size, num_classes = sigmoid.shape
+    if sigmoid.ndim == 1:
+        windows_size, num_classes = 1, sigmoid.shape[0]
+    elif sigmoid.ndim == 2:
+        windows_size, num_classes = sigmoid.shape
+    else:
+        raise ValueError("Input binary encoded data must be 1D or 2D.")
     decoded_data = []
     
-    for i in range(windows_size):
+    if sigmoid.ndim == 2:
+        for i in range(windows_size):
+            # Apply threshold and get indices of classes with probabilities above the threshold
+            above_threshold_indices = (sigmoid[i] > threshold).nonzero(as_tuple=True)[0]
+            if len(above_threshold_indices) > 0:
+                # Get probabilities of classes above the threshold
+                probs = sigmoid[i][above_threshold_indices]
+                # Sort these probabilities and select the top_k
+                top_k_indices = probs.topk(min(top_k, len(probs)), largest=True).indices
+                selected_indices = above_threshold_indices[top_k_indices]
+                # Adjust indices for 1-based numbering and append to the result
+                decoded_row = (selected_indices + 1).tolist()
+                decoded_data.append(decoded_row)
+            else:
+                # If no class probability exceeds the threshold, append an empty list
+                decoded_data.append([])
+    elif sigmoid.ndim == 1:
         # Apply threshold and get indices of classes with probabilities above the threshold
-        above_threshold_indices = (sigmoid[i] > threshold).nonzero(as_tuple=True)[0]
+        above_threshold_indices = (sigmoid > threshold).nonzero(as_tuple=True)[0]
         if len(above_threshold_indices) > 0:
             # Get probabilities of classes above the threshold
-            probs = sigmoid[i][above_threshold_indices]
+            probs = sigmoid[above_threshold_indices]
             # Sort these probabilities and select the top_k
             top_k_indices = probs.topk(min(top_k, len(probs)), largest=True).indices
             selected_indices = above_threshold_indices[top_k_indices]
@@ -72,8 +108,9 @@ def binary_decode_array(binary_encoded_data, threshold=0.25, top_k=20):
         else:
             # If no class probability exceeds the threshold, append an empty list
             decoded_data.append([])
-    
+
     return decoded_data
+
 def one_hot_encode_array(input_array, num_classes=80):
     """
     Convert an input array of shape (windows_size, seq_len) to a one-hot encoded tensor of shape (windows_size, seq_len, num_classes).
@@ -167,13 +204,14 @@ class Transformer_Model(nn.Module):
         self.linear = nn.Linear(hidden_size, output_size)
 
     def forward(self, x):
-        x = x.int() # (batch_size, windows_size, seq_len)
-        x = x.view(x.size(0), -1) # (batch_size, windows_size * seq_len)
-        embedded = self.embedding(x) #(batch_size, seq_len, hidden_size)
-        embedded = embedded.permute(1, 0, 2) # (seq_len, batch_size, hidden_size)
+        # x = x.long() # (batch_size, windows_size, seq_len)
+        # x = x.view(x.size(0), -1) # (batch_size, windows_size * seq_len)
+        # embedded = self.embedding(x) #(batch_size, seq_len, hidden_size)
+        # embedded = embedded.permute(1, 0, 2) # (seq_len, batch_size, hidden_size)
         # embedded = self.dropout(embedded)
-        positional_encoded = self.positional_encoding(embedded) 
-        transformer_encoded = self.transformer_encoder(positional_encoded)  # (seq_len, batch_size, hidden_size)
+        # positional_encoded = self.positional_encoding(embedded) 
+        positional_encoded = x.permute(1, 0, 2)  # (batch_size, windows_size, seq_len) -> (seq_len, batch_size, windows_size)
+        transformer_encoded = self.transformer_encoder(positional_encoded)  # (windows_size, batch_size, seq_len)
         # transformer_encoded = self.dropout(transformer_encoded)
         linear_out = self.linear(transformer_encoded.mean(dim=0))
         # linear_out = torch.sigmoid(linear_out)
@@ -269,6 +307,7 @@ class CustomSchedule(_LRScheduler):
 # 定义数据集类
 class MyDataset(Dataset):
     def __init__(self, data, windows, cut_num, model='Transformer', num_classes=80, test_flag=0, test_list=[], f_data=0):
+        global extra_classes
         tmp = []
         # if test_flag == 2 and f_data == 0:
         #     windows = windows - 1
@@ -282,7 +321,7 @@ class MyDataset(Dataset):
                     temp_item = []
                     for item in sub_data:
                         _tmp = []
-                        item = item - 1
+                        # item = item - 1
                         if i < windows:
                             consecutive_features = [0.0] * windows 
                             interval_features = [0.0] * windows 
@@ -303,13 +342,18 @@ class MyDataset(Dataset):
                             # cnt_combinations = self.count_combinations(_item)
                             prime_composite_ratio = self.calculate_prime_composite_ratio(_item)
                             max_val, min_val, mean_val, median_val, std_val, skewness_val, kurtosis_val = self.calculate_statistical_features(_item)
-                        features = np.hstack((self.standardize(consecutive_features), self.standardize(interval_features),  \
-                                                self.standardize(odd_even_ratio), self.standardize(high_low_ratio), \
-                                                self.standardize(prime_composite_ratio), self.standardize(max_val), \
-                                                self.standardize(min_val), self.standardize(mean_val), \
-                                                self.standardize(median_val), self.standardize(std_val), \
-                                                self.standardize(skewness_val), self.standardize(kurtosis_val)))
-                        _tmp = np.concatenate((item, features))
+                        # features = np.hstack((self.standardize(consecutive_features), self.standardize(interval_features),  \
+                        #                         self.standardize(odd_even_ratio), self.standardize(high_low_ratio), \
+                        #                         self.standardize(prime_composite_ratio), self.standardize(max_val), \
+                        #                         self.standardize(min_val), self.standardize(mean_val), \
+                        #                         self.standardize(median_val), self.standardize(std_val), \
+                        #                         self.standardize(skewness_val), self.standardize(kurtosis_val)))
+                        # _tmp = np.concatenate((binary_encode_array(item, num_classes), features))
+                        features = np.hstack((consecutive_features, interval_features, odd_even_ratio, high_low_ratio, \
+                                                prime_composite_ratio, max_val, min_val, mean_val, \
+                                                median_val, std_val, skewness_val, kurtosis_val))
+                        _tmp = np.concatenate((item.astype(np.float32), features))
+                        extra_classes = features.shape[0]
                         temp_item.append(_tmp)
                     tmp.append(temp_item)
             else:
@@ -319,7 +363,7 @@ class MyDataset(Dataset):
                     temp_item = []
                     for item in sub_data:
                         _tmp = []
-                        item = item - 1
+                        # item = item - 1
                         if i < windows:
                             consecutive_features = [0.0] * windows 
                             interval_features = [0.0] * windows 
@@ -340,22 +384,27 @@ class MyDataset(Dataset):
                             # cnt_combinations = self.count_combinations(_item)
                             prime_composite_ratio = self.calculate_prime_composite_ratio(_item)
                             max_val, min_val, mean_val, median_val, std_val, skewness_val, kurtosis_val = self.calculate_statistical_features(_item)
-                        features = np.hstack((self.standardize(consecutive_features), self.standardize(interval_features),  \
-                                                self.standardize(odd_even_ratio), self.standardize(high_low_ratio), \
-                                                self.standardize(prime_composite_ratio), self.standardize(max_val), \
-                                                self.standardize(min_val), self.standardize(mean_val), \
-                                                self.standardize(median_val), self.standardize(std_val), \
-                                                self.standardize(skewness_val), self.standardize(kurtosis_val)))
-                        _tmp = np.concatenate((item, features))
+                        # features = np.hstack((self.standardize(consecutive_features), self.standardize(interval_features),  \
+                        #                         self.standardize(odd_even_ratio), self.standardize(high_low_ratio), \
+                        #                         self.standardize(prime_composite_ratio), self.standardize(max_val), \
+                        #                         self.standardize(min_val), self.standardize(mean_val), \
+                        #                         self.standardize(median_val), self.standardize(std_val), \
+                        #                         self.standardize(skewness_val), self.standardize(kurtosis_val)))
+                        # _tmp = np.concatenate((binary_encode_array(item, num_classes), features))
+                        features = np.hstack((consecutive_features, interval_features, odd_even_ratio, high_low_ratio, \
+                                                prime_composite_ratio, max_val, min_val, mean_val, \
+                                                median_val, std_val, skewness_val, kurtosis_val))
+                        _tmp = np.concatenate((item.astype(np.float32), features))
+                        extra_classes = features.shape[0]
                         temp_item.append(_tmp)
                     tmp.append(temp_item)
         pbar.close()
         self.data = np.array(tmp)
         self.model = model
-        self.num_classes = num_classes
+        _, _, self.num_classes = self.data.shape
         self.test_flag = test_flag
         self.f_data = f_data
-        self.cut_num = cut_num
+        self.cut_num = num_classes
     
     def __len__(self):
         return len(self.data) - 1
@@ -487,8 +536,10 @@ class MyDataset(Dataset):
             x = torch.from_numpy(self.data[idx][0:-1][::-1].copy())
             y = torch.from_numpy(self.data[idx][0].copy()[:self.cut_num]).unsqueeze(0)
         if self.model == 'Transformer':
-            x_hot = binary_encode_array(x, self.num_classes) 
-            y_hot = binary_encode_array(y, self.num_classes)
+            # x_hot = binary_encode_array(x, self.num_classes) 
+            # y_hot = binary_encode_array(y, self.num_classes)
+            x_hot = x
+            y_hot = y
         elif self.model == 'LSTM':
             # x_hot = one_hot_encode_array(x, self.num_classes)
             # y_hot = one_hot_encode_array(y, self.num_classes)
