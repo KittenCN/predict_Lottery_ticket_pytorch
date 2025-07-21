@@ -47,12 +47,12 @@ parser.add_argument('--init', default=0, type=int, help="init")
 parser.add_argument('--train_mode', default=0, type=int, help="0: mormal, 1: new trainning, 2: best test model, 3: best loss model")
 parser.add_argument('--split_time', default=2021351, type=int, help="tranning data split time, greater than 0, will saving best test model")
 parser.add_argument('--save_best_loss', default=0, type=int, help="save best loss model")
-parser.add_argument('--cpu', default=0, type=int, help="using cpu, 0: cpu, 1: checking gpu")
+parser.add_argument('--cpu', default=0, type=int, help="using cpu, 1: cpu, 0: checking gpu")
 args = parser.parse_args()
 
 warnings.filterwarnings('ignore')
 os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
-if args.cpu == 1:
+if args.cpu == 0:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 else:
     device = torch.device("cpu")
