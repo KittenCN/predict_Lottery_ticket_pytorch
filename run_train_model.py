@@ -47,11 +47,15 @@ parser.add_argument('--init', default=0, type=int, help="init")
 parser.add_argument('--train_mode', default=0, type=int, help="0: mormal, 1: new trainning, 2: best test model, 3: best loss model")
 parser.add_argument('--split_time', default=2021351, type=int, help="tranning data split time, greater than 0, will saving best test model")
 parser.add_argument('--save_best_loss', default=0, type=int, help="save best loss model")
+parser.add_argument('--cpu', default=0, type=int, help="using cpu, 1: cpu, 0: gpu")
 args = parser.parse_args()
 
 warnings.filterwarnings('ignore')
 os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+if args.cpu == 1:
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+else:
+    device = torch.device("cpu")
 
 pred_key = {}
 save_epoch = 50
@@ -370,7 +374,8 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
                             # y_pred = model(x).view(-1, m_args["model_args"]["{}_sequence_len".format(sub_name_eng)], 
                             #                        m_args["model_args"]["{}_n_class".format(sub_name_eng)])
                             y_pred = model(x)
-                            tt_loss = criterion(y_pred, y.squeeze(1))
+                            y_pred = y_pred.view(y_pred.shape[0], -1, y_pred.shape[-1])
+                            tt_loss = criterion(y_pred, y[:,:,:m_args["model_args"]["{}_sequence_len".format(sub_name_eng)]])
                         # test_loss += tt_loss.item() * x.size(0)
                         test_loss += tt_loss.item()
                         # calculate topk loss

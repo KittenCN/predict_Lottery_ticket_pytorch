@@ -4,6 +4,7 @@ Author: KittenCN
 """
 import argparse
 import modeling
+import torch
 from config import *
 from loguru import logger
 from common import setMiniargs, get_current_number, run_predict, init
@@ -19,7 +20,13 @@ parser.add_argument('--num_heads', default=8, type=int, help="num_heads")
 parser.add_argument('--f_data', default=0, type=int, help="指定预测期数")
 parser.add_argument('--model', default='Transformer', type=str, help="model name")
 parser.add_argument('--test_mode', default=0, type=int, help="test_mode")
+parser.add_argument('--cpu', default=0, type=int, help="using cpu, 1: cpu, 0: gpu")
 args = parser.parse_args()
+
+if args.cpu == 1:
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+else:
+    device = torch.device("cpu")
 
 if __name__ == '__main__':
     if not os.path.exists(result_path):
