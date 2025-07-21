@@ -346,17 +346,17 @@ class MyDataset(Dataset):
                             # cnt_combinations = self.count_combinations(_item)
                             prime_composite_ratio = self.calculate_prime_composite_ratio(_item)
                             max_val, min_val, mean_val, median_val, std_val, skewness_val, kurtosis_val = self.calculate_statistical_features(_item)
-                        features = np.hstack((self.standardize(consecutive_features), self.standardize(interval_features),  \
-                                                self.standardize(odd_even_ratio), self.standardize(high_low_ratio), \
-                                                self.standardize(prime_composite_ratio), self.standardize(max_val), \
-                                                self.standardize(min_val), self.standardize(mean_val), \
-                                                self.standardize(median_val), self.standardize(std_val), \
-                                                self.standardize(skewness_val), self.standardize(kurtosis_val)))
-                        _tmp = np.concatenate((binary_encode_array(item, num_classes), features))
-                        # features = np.hstack((consecutive_features, interval_features, odd_even_ratio, high_low_ratio, \
-                        #                         prime_composite_ratio, max_val, min_val, mean_val, \
-                        #                         median_val, std_val, skewness_val, kurtosis_val))
-                        # _tmp = np.concatenate((item.astype(np.float32), features))
+                        # features = np.hstack((self.standardize(consecutive_features), self.standardize(interval_features),  \
+                        #                         self.standardize(odd_even_ratio), self.standardize(high_low_ratio), \
+                        #                         self.standardize(prime_composite_ratio), self.standardize(max_val), \
+                        #                         self.standardize(min_val), self.standardize(mean_val), \
+                        #                         self.standardize(median_val), self.standardize(std_val), \
+                        #                         self.standardize(skewness_val), self.standardize(kurtosis_val)))
+                        # _tmp = np.concatenate((binary_encode_array(item, num_classes), features))
+                        features = np.hstack((consecutive_features, interval_features, odd_even_ratio, high_low_ratio, \
+                                                prime_composite_ratio, max_val, min_val, mean_val, \
+                                                median_val, std_val, skewness_val, kurtosis_val))
+                        _tmp = np.concatenate((item.astype(np.float32), features))
                         extra_classes = features.shape[0]
                         temp_item.append(_tmp)
                     tmp.append(temp_item)
@@ -388,17 +388,17 @@ class MyDataset(Dataset):
                             # cnt_combinations = self.count_combinations(_item)
                             prime_composite_ratio = self.calculate_prime_composite_ratio(_item)
                             max_val, min_val, mean_val, median_val, std_val, skewness_val, kurtosis_val = self.calculate_statistical_features(_item)
-                        features = np.hstack((self.standardize(consecutive_features), self.standardize(interval_features),  \
-                                                self.standardize(odd_even_ratio), self.standardize(high_low_ratio), \
-                                                self.standardize(prime_composite_ratio), self.standardize(max_val), \
-                                                self.standardize(min_val), self.standardize(mean_val), \
-                                                self.standardize(median_val), self.standardize(std_val), \
-                                                self.standardize(skewness_val), self.standardize(kurtosis_val)))
-                        _tmp = np.concatenate((binary_encode_array(item, num_classes), features))
-                        # features = np.hstack((consecutive_features, interval_features, odd_even_ratio, high_low_ratio, \
-                        #                         prime_composite_ratio, max_val, min_val, mean_val, \
-                        #                         median_val, std_val, skewness_val, kurtosis_val))
-                        # _tmp = np.concatenate((item.astype(np.float32), features))
+                        # features = np.hstack((self.standardize(consecutive_features), self.standardize(interval_features),  \
+                        #                         self.standardize(odd_even_ratio), self.standardize(high_low_ratio), \
+                        #                         self.standardize(prime_composite_ratio), self.standardize(max_val), \
+                        #                         self.standardize(min_val), self.standardize(mean_val), \
+                        #                         self.standardize(median_val), self.standardize(std_val), \
+                        #                         self.standardize(skewness_val), self.standardize(kurtosis_val)))
+                        # _tmp = np.concatenate((binary_encode_array(item, num_classes), features))
+                        features = np.hstack((consecutive_features, interval_features, odd_even_ratio, high_low_ratio, \
+                                                prime_composite_ratio, max_val, min_val, mean_val, \
+                                                median_val, std_val, skewness_val, kurtosis_val))
+                        _tmp = np.concatenate((item.astype(np.float32), features))
                         extra_classes = features.shape[0]
                         temp_item.append(_tmp)
                     tmp.append(temp_item)

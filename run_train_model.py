@@ -125,13 +125,13 @@ def load_model(m_args, syspath, sub_name_eng, model, optimizer, lr_scheduler, sc
                     args.num_layers = checkpoint['num_layers']
                     args.num_heads = checkpoint['num_heads']
                     if args.model == "Transformer":
-                        model = _model(input_size=(m_args["model_args"]["{}_n_class".format(sub_name_eng)]+modeling.extra_classes)*m_args["model_args"]["windows_size"], 
-                                       output_size=m_args["model_args"]["{}_n_class".format(sub_name_eng)], 
+                        model = _model(input_size=(m_args["model_args"]["{}_sequence_len".format(sub_name_eng)]+modeling.extra_classes)*m_args["model_args"]["windows_size"], 
+                                       output_size=m_args["model_args"]["{}_sequence_len".format(sub_name_eng)], 
                                        hidden_size=args.hidden_size, 
                                        num_layers=args.num_layers, 
                                        num_heads=args.num_heads, 
                                        dropout=0.5, 
-                                       num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)]+modeling.extra_classes, 
+                                       num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)], 
                                        embedding_dim=50, 
                                        windows_size=int(args.windows_size)).to(device)
                     elif args.model == "LSTM":
@@ -141,7 +141,7 @@ def load_model(m_args, syspath, sub_name_eng, model, optimizer, lr_scheduler, sc
                                        num_layers=args.num_layers, 
                                        num_heads=args.num_heads, 
                                        dropout=0.5, 
-                                       num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)]+modeling.extra_classes, 
+                                       num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)], 
                                        embedding_dim=50, 
                                        windows_size=int(args.windows_size)).to(device)
                     optimizer = optim.Adam(model.parameters(), lr=args.lr)
@@ -180,6 +180,10 @@ def load_model(m_args, syspath, sub_name_eng, model, optimizer, lr_scheduler, sc
         logger.info("已加载{}模型！".format(sub_name))
     else:
         logger.info("没有找到{}模型，将重新训练！".format(sub_name))
+    if torch.cuda.device_count() >= 1:
+        print("Let's use", torch.cuda.device_count(), "GPUs!")
+        if torch.cuda.device_count() > 1:
+            model = nn.DataParallel(model)
     return current_epoch, no_update_times, split_time, _test_list
 
 def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
@@ -201,13 +205,13 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     # 定义模型和优化器
     # args.hidden_size = m_args["model_args"]["{}_n_class".format(sub_name_eng)]+modeling.extra_classes
     if args.model == "Transformer":
-        model = _model(input_size=((m_args["model_args"]["{}_n_class".format(sub_name_eng)])+modeling.extra_classes)*m_args["model_args"]["windows_size"], 
-                       output_size=m_args["model_args"]["{}_n_class".format(sub_name_eng)], 
+        model = _model(input_size=((m_args["model_args"]["{}_sequence_len".format(sub_name_eng)])+modeling.extra_classes)*m_args["model_args"]["windows_size"], 
+                       output_size=m_args["model_args"]["{}_sequence_len".format(sub_name_eng)], 
                        hidden_size=args.hidden_size, 
                        num_layers=args.num_layers, 
                        num_heads=args.num_heads, 
                        dropout=0.5, 
-                       num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)]+modeling.extra_classes, 
+                       num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)], 
                        embedding_dim=50, 
                        windows_size=int(args.windows_size)).to(device)
     elif args.model == "LSTM":
@@ -217,7 +221,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
                        num_layers=args.num_layers, 
                        num_heads=args.num_heads, 
                        dropout=0.5, 
-                       num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)]+modeling.extra_classes, 
+                       num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)], 
                        embedding_dim=50, 
                        windows_size=int(args.windows_size)).to(device)
     # criterion = nn.MSELoss()
@@ -329,7 +333,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
                 #                        m_args["model_args"]["{}_n_class".format(sub_name_eng)])
                 y_pred = model(x)
                 y_pred = y_pred.view(y_pred.shape[0], -1, y_pred.shape[-1])
-                t_loss = criterion(y_pred, y)
+                t_loss = criterion(y_pred, y[:,:,:m_args["model_args"]["{}_sequence_len".format(sub_name_eng)]])
             scaler.scale(t_loss).backward()
             scaler.step(optimizer)
             scaler.update()
