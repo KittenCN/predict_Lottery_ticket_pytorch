@@ -220,6 +220,10 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
                        num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)], 
                        embedding_dim=50, 
                        windows_size=int(args.windows_size)).to(device)
+    if torch.cuda.device_count() >= 1:
+        if torch.cuda.device_count() > 1:
+            model = nn.DataParallel(model)
+        model = model.to(device)
     # criterion = nn.MSELoss()
     criterion = nn.BCEWithLogitsLoss() # 二分类交叉熵
     # criterion = nn.BCELoss() # 二分类交叉熵
@@ -301,10 +305,6 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     topk_times = 0
     top_loss = 0.0
     top_times = 0
-    if torch.cuda.device_count() >= 1:
-        if torch.cuda.device_count() > 1:
-            model = nn.DataParallel(model)
-        model = model.to(device)
     for epoch in range(current_epoch, model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)]):
         no_update_times += 1
         if no_update_times > args.ext_times and args.plus_mode == 1:
@@ -316,10 +316,6 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
             else:
                 _, _, _, _ = load_model(m_args, syspath, sub_name_eng, model, optimizer, lr_scheduler, scaler, sub_name, 
                                         other="_{}_{}".format(start_dt, "best_loss"))
-            if torch.cuda.device_count() >= 1:
-                if torch.cuda.device_count() > 1:
-                    model = nn.DataParallel(model)
-                model = model.to(device)
         if epoch == current_epoch:
             pbar.update(current_epoch)
         running_loss = 0.0
