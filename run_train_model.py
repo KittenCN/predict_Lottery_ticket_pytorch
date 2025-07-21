@@ -51,7 +51,6 @@ parser.add_argument('--cpu', default=0, type=int, help="using cpu, 1: cpu, 0: ch
 args = parser.parse_args()
 
 warnings.filterwarnings('ignore')
-os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 if args.cpu == 0:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 else:
