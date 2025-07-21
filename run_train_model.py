@@ -33,7 +33,7 @@ parser.add_argument('--predict_pro', default=0, type=int, help="更新batch_size
 parser.add_argument('--epochs', default=1, type=int, help="训练轮数(红蓝球交叉训练)")
 parser.add_argument('--cq', default=0, type=int, help="是否使用出球顺序，0：不使用（即按从小到大排序），1：使用")
 parser.add_argument('--download_data', default=1, type=int, help="是否下载数据")
-parser.add_argument('--hidden_size', default=512, type=int, help="hidden_size")
+parser.add_argument('--hidden_size', default=2560, type=int, help="hidden_size")
 parser.add_argument('--num_layers', default=6, type=int, help="num_layers")
 parser.add_argument('--num_heads', default=8, type=int, help="num_heads")
 parser.add_argument('--tensorboard', default=0, type=int, help="tensorboard switch")
@@ -125,20 +125,23 @@ def load_model(m_args, syspath, sub_name_eng, model, optimizer, lr_scheduler, sc
                     args.num_layers = checkpoint['num_layers']
                     args.num_heads = checkpoint['num_heads']
                     if args.model == "Transformer":
-                        model = _model(input_size=m_args["model_args"]["{}_n_class".format(sub_name_eng)]*m_args["model_args"]["windows_size"], 
+                        model = _model(input_size=(m_args["model_args"]["{}_n_class".format(sub_name_eng)]+modeling.extra_classes)*m_args["model_args"]["windows_size"], 
                                        output_size=m_args["model_args"]["{}_n_class".format(sub_name_eng)], 
                                        hidden_size=args.hidden_size, 
                                        num_layers=args.num_layers, 
                                        num_heads=args.num_heads, 
-                                       dropout=0.5).to(device)
+                                       dropout=0.5, 
+                                       num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)]+modeling.extra_classes, 
+                                       embedding_dim=50, 
+                                       windows_size=int(args.windows_size)).to(device)
                     elif args.model == "LSTM":
                         model = _model(input_size=m_args["model_args"]["{}_sequence_len".format(sub_name_eng)], 
-                                       output_size=m_args["model_args"]["{}_sequence_len".format(sub_name_eng)]*m_args["model_args"]["{}_n_class".format(sub_name_eng)], 
+                                       output_size=(m_args["model_args"]["{}_sequence_len".format(sub_name_eng)]+modeling.extra_classes)*m_args["model_args"]["{}_n_class".format(sub_name_eng)], 
                                        hidden_size=args.hidden_size, 
                                        num_layers=args.num_layers, 
                                        num_heads=args.num_heads, 
                                        dropout=0.5, 
-                                       num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)], 
+                                       num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)]+modeling.extra_classes, 
                                        embedding_dim=50, 
                                        windows_size=int(args.windows_size)).to(device)
                     optimizer = optim.Adam(model.parameters(), lr=args.lr)
@@ -196,28 +199,30 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
         os.makedirs(syspath)
     logger.info("标签数据维度: {}".format(dataset.data.shape))
     # 定义模型和优化器
-    args.hidden_size = m_args["model_args"]["{}_n_class".format(sub_name_eng)]
+    # args.hidden_size = m_args["model_args"]["{}_n_class".format(sub_name_eng)]+modeling.extra_classes
     if args.model == "Transformer":
-        model = _model(input_size=(m_args["model_args"]["{}_n_class".format(sub_name_eng)])*m_args["model_args"]["windows_size"], 
+        model = _model(input_size=((m_args["model_args"]["{}_n_class".format(sub_name_eng)])+modeling.extra_classes)*m_args["model_args"]["windows_size"], 
                        output_size=m_args["model_args"]["{}_n_class".format(sub_name_eng)], 
                        hidden_size=args.hidden_size, 
                        num_layers=args.num_layers, 
                        num_heads=args.num_heads, 
-                       dropout=0.5).to(device)
+                       dropout=0.5, 
+                       num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)]+modeling.extra_classes, 
+                       embedding_dim=50, 
+                       windows_size=int(args.windows_size)).to(device)
     elif args.model == "LSTM":
-        model = _model(input_size=m_args["model_args"]["{}_sequence_len".format(sub_name_eng)], 
-                       output_size=m_args["model_args"]["{}_sequence_len".format(sub_name_eng)]*m_args["model_args"]["{}_n_class".format(sub_name_eng)], 
+        model = _model(input_size=m_args["model_args"]["{}_sequence_len".format(sub_name_eng)]+modeling.extra_classes, 
+                       output_size=(m_args["model_args"]["{}_sequence_len".format(sub_name_eng)]+modeling.extra_classes)*m_args["model_args"]["{}_n_class".format(sub_name_eng)], 
                        hidden_size=args.hidden_size, 
                        num_layers=args.num_layers, 
                        num_heads=args.num_heads, 
                        dropout=0.5, 
-                       num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)], 
+                       num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)]+modeling.extra_classes, 
                        embedding_dim=50, 
                        windows_size=int(args.windows_size)).to(device)
     # criterion = nn.MSELoss()
-    # criterion = nn.BCEWithLogitsLoss() # 二分类交叉熵
+    criterion = nn.BCEWithLogitsLoss() # 二分类交叉熵
     # criterion = nn.BCELoss() # 二分类交叉熵
-    criterion = nn.BCEWithLogitsLoss()
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
     # lr_scheduler=modeling.CustomSchedule(d_model=args.hidden_size, optimizer=optimizer)
     lr_scheduler = modeling.CustomSchedule(optimizer=optimizer, 

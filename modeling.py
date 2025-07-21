@@ -191,9 +191,10 @@ class PositionalEncoding(nn.Module):
 
 
 class Transformer_Model(nn.Module): 
-    def __init__(self, input_size, output_size=20, hidden_size=512, num_layers=8, num_heads=16, dropout=0.1):
+    def __init__(self, input_size, output_size=20, hidden_size=512, num_layers=8, num_heads=16, dropout=0.1, num_embeddings=20, embedding_dim=50, windows_size=30):
         super(Transformer_Model, self).__init__()
 
+        self.input_fc = nn.Linear(input_size, hidden_size)
         self.embedding = nn.Embedding(input_size, hidden_size)
         self.positional_encoding = PositionalEncoding(hidden_size, max_len=int(input_size*1.2))
         self.transformer_layer = nn.TransformerEncoderLayer(d_model=hidden_size, nhead=num_heads, dropout=dropout)
@@ -202,18 +203,21 @@ class Transformer_Model(nn.Module):
             num_layers)
         self.dropout = nn.Dropout(dropout)  # 添加 dropout 层
         self.linear = nn.Linear(hidden_size, output_size)
+        self.windows_size = windows_size
 
     def forward(self, x):
         # x = x.long() # (batch_size, windows_size, seq_len)
-        # x = x.view(x.size(0), -1) # (batch_size, windows_size * seq_len)
+        x = x.view(x.size(0), -1) # (batch_size, windows_size * seq_len)
         # embedded = self.embedding(x) #(batch_size, seq_len, hidden_size)
         # embedded = embedded.permute(1, 0, 2) # (seq_len, batch_size, hidden_size)
         # embedded = self.dropout(embedded)
         # positional_encoded = self.positional_encoding(embedded) 
-        positional_encoded = x.permute(1, 0, 2)  # (batch_size, windows_size, seq_len) -> (seq_len, batch_size, windows_size)
+        positional_encoded = self.input_fc(x)
+        # x = x.view(x.size(0), self.windows_size, -1)  # (batch_size, windows_size * seq_len)
+        # positional_encoded = x.permute(1, 0, 2)  # (batch_size, windows_size, seq_len) -> (seq_len, batch_size, windows_size)
         transformer_encoded = self.transformer_encoder(positional_encoded)  # (windows_size, batch_size, seq_len)
-        # transformer_encoded = self.dropout(transformer_encoded)
-        linear_out = self.linear(transformer_encoded.mean(dim=0))
+        transformer_encoded = self.dropout(transformer_encoded)
+        linear_out = self.linear(transformer_encoded)
         # linear_out = torch.sigmoid(linear_out)
         return linear_out
     
@@ -342,17 +346,17 @@ class MyDataset(Dataset):
                             # cnt_combinations = self.count_combinations(_item)
                             prime_composite_ratio = self.calculate_prime_composite_ratio(_item)
                             max_val, min_val, mean_val, median_val, std_val, skewness_val, kurtosis_val = self.calculate_statistical_features(_item)
-                        # features = np.hstack((self.standardize(consecutive_features), self.standardize(interval_features),  \
-                        #                         self.standardize(odd_even_ratio), self.standardize(high_low_ratio), \
-                        #                         self.standardize(prime_composite_ratio), self.standardize(max_val), \
-                        #                         self.standardize(min_val), self.standardize(mean_val), \
-                        #                         self.standardize(median_val), self.standardize(std_val), \
-                        #                         self.standardize(skewness_val), self.standardize(kurtosis_val)))
-                        # _tmp = np.concatenate((binary_encode_array(item, num_classes), features))
-                        features = np.hstack((consecutive_features, interval_features, odd_even_ratio, high_low_ratio, \
-                                                prime_composite_ratio, max_val, min_val, mean_val, \
-                                                median_val, std_val, skewness_val, kurtosis_val))
-                        _tmp = np.concatenate((item.astype(np.float32), features))
+                        features = np.hstack((self.standardize(consecutive_features), self.standardize(interval_features),  \
+                                                self.standardize(odd_even_ratio), self.standardize(high_low_ratio), \
+                                                self.standardize(prime_composite_ratio), self.standardize(max_val), \
+                                                self.standardize(min_val), self.standardize(mean_val), \
+                                                self.standardize(median_val), self.standardize(std_val), \
+                                                self.standardize(skewness_val), self.standardize(kurtosis_val)))
+                        _tmp = np.concatenate((binary_encode_array(item, num_classes), features))
+                        # features = np.hstack((consecutive_features, interval_features, odd_even_ratio, high_low_ratio, \
+                        #                         prime_composite_ratio, max_val, min_val, mean_val, \
+                        #                         median_val, std_val, skewness_val, kurtosis_val))
+                        # _tmp = np.concatenate((item.astype(np.float32), features))
                         extra_classes = features.shape[0]
                         temp_item.append(_tmp)
                     tmp.append(temp_item)
@@ -384,17 +388,17 @@ class MyDataset(Dataset):
                             # cnt_combinations = self.count_combinations(_item)
                             prime_composite_ratio = self.calculate_prime_composite_ratio(_item)
                             max_val, min_val, mean_val, median_val, std_val, skewness_val, kurtosis_val = self.calculate_statistical_features(_item)
-                        # features = np.hstack((self.standardize(consecutive_features), self.standardize(interval_features),  \
-                        #                         self.standardize(odd_even_ratio), self.standardize(high_low_ratio), \
-                        #                         self.standardize(prime_composite_ratio), self.standardize(max_val), \
-                        #                         self.standardize(min_val), self.standardize(mean_val), \
-                        #                         self.standardize(median_val), self.standardize(std_val), \
-                        #                         self.standardize(skewness_val), self.standardize(kurtosis_val)))
-                        # _tmp = np.concatenate((binary_encode_array(item, num_classes), features))
-                        features = np.hstack((consecutive_features, interval_features, odd_even_ratio, high_low_ratio, \
-                                                prime_composite_ratio, max_val, min_val, mean_val, \
-                                                median_val, std_val, skewness_val, kurtosis_val))
-                        _tmp = np.concatenate((item.astype(np.float32), features))
+                        features = np.hstack((self.standardize(consecutive_features), self.standardize(interval_features),  \
+                                                self.standardize(odd_even_ratio), self.standardize(high_low_ratio), \
+                                                self.standardize(prime_composite_ratio), self.standardize(max_val), \
+                                                self.standardize(min_val), self.standardize(mean_val), \
+                                                self.standardize(median_val), self.standardize(std_val), \
+                                                self.standardize(skewness_val), self.standardize(kurtosis_val)))
+                        _tmp = np.concatenate((binary_encode_array(item, num_classes), features))
+                        # features = np.hstack((consecutive_features, interval_features, odd_even_ratio, high_low_ratio, \
+                        #                         prime_composite_ratio, max_val, min_val, mean_val, \
+                        #                         median_val, std_val, skewness_val, kurtosis_val))
+                        # _tmp = np.concatenate((item.astype(np.float32), features))
                         extra_classes = features.shape[0]
                         temp_item.append(_tmp)
                     tmp.append(temp_item)
