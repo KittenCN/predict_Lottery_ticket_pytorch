@@ -228,8 +228,9 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
             model = nn.DataParallel(model)
         model = model.to(device)
     # criterion = nn.MSELoss()
-    criterion = nn.BCEWithLogitsLoss() # 二分类交叉熵
+    # criterion = nn.BCEWithLogitsLoss() # 二分类交叉熵
     # criterion = nn.BCELoss() # 二分类交叉熵
+    criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
     # lr_scheduler=modeling.CustomSchedule(d_model=args.hidden_size, optimizer=optimizer)
     lr_scheduler = modeling.CustomSchedule(optimizer=optimizer, 
@@ -335,8 +336,9 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
                 # y_pred = model(x).view(-1, m_args["model_args"]["{}_sequence_len".format(sub_name_eng)], 
                 #                        m_args["model_args"]["{}_n_class".format(sub_name_eng)])
                 y_pred = model(x)
-                y_pred = y_pred.view(y_pred.shape[0], -1, y_pred.shape[-1])
-                t_loss = criterion(y_pred, y[:,:,:m_args["model_args"]["{}_sequence_len".format(sub_name_eng)]])
+                # y_pred = y_pred.view(y_pred.shape[0], -1, y_pred.shape[-1])
+                y = y[:,:,:m_args["model_args"]["{}_sequence_len".format(sub_name_eng)]].squeeze(1)
+                t_loss = criterion(y_pred, y)
             scaler.scale(t_loss).backward()
             scaler.step(optimizer)
             scaler.update()
@@ -373,8 +375,9 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
                             # y_pred = model(x).view(-1, m_args["model_args"]["{}_sequence_len".format(sub_name_eng)], 
                             #                        m_args["model_args"]["{}_n_class".format(sub_name_eng)])
                             y_pred = model(x)
-                            y_pred = y_pred.view(y_pred.shape[0], -1, y_pred.shape[-1])
-                            tt_loss = criterion(y_pred, y[:,:,:m_args["model_args"]["{}_sequence_len".format(sub_name_eng)]])
+                            # y_pred = y_pred.view(y_pred.shape[0], -1, y_pred.shape[-1])
+                            y = y[:,:,:m_args["model_args"]["{}_sequence_len".format(sub_name_eng)]].squeeze(1)
+                            tt_loss = criterion(y_pred, y)
                         # test_loss += tt_loss.item() * x.size(0)
                         test_loss += tt_loss.item()
                         # calculate topk loss
