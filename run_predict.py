@@ -20,7 +20,7 @@ parser.add_argument('--num_heads', default=8, type=int, help="num_heads")
 parser.add_argument('--f_data', default=0, type=int, help="指定预测期数")
 parser.add_argument('--model', default='Transformer', type=str, help="model name")
 parser.add_argument('--test_mode', default=0, type=int, help="test_mode")
-parser.add_argument('--cpu', default=0, type=int, help="using cpu, 1: cpu, 0: gpu")
+parser.add_argument('--cpu', default=0, type=int, help="using cpu, 0: cpu, 1: checking gpu")
 args = parser.parse_args()
 
 if args.cpu == 1:
