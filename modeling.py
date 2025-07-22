@@ -19,35 +19,35 @@ extra_classes = 0
 
 def binary_encode_array(input_array, num_classes=80):
     """
-    Convert an input array of shape (windows_size, seq_len) to a binary encoded tensor of shape (windows_size, num_classes).
+    Convert an input array of shape (seq_len, d_model) to a binary encoded tensor of shape (seq_len, num_classes).
     
     Parameters:
-    - input_array: An array of shape (windows_size, seq_len), where each row represents a time step and each element in the row represents a selected number.
+    - input_array: An array of shape (seq_len, d_model), where each row represents a time step and each element in the row represents a selected number.
     - num_classes: The total number of possible classes (e.g., 1 to 80).
     
     Returns:
-    - A binary encoded tensor of shape (windows_size, num_classes).
+    - A binary encoded tensor of shape (seq_len, num_classes).
     """
     if input_array.ndim == 1:
-        windows_size, seq_len = 1, input_array.shape[0]
+        seq_len, d_model = 1, input_array.shape[0]
         # Initialize a tensor of zeros with the desired output shape
         binary_encoded_array = torch.zeros((num_classes,), dtype=torch.float32)
     elif input_array.ndim == 2:
-        windows_size, seq_len = input_array.shape
+        seq_len, d_model = input_array.shape
         # Initialize a tensor of zeros with the desired output shape
-        binary_encoded_array = torch.zeros((windows_size, num_classes), dtype=torch.float32)
+        binary_encoded_array = torch.zeros((seq_len, num_classes), dtype=torch.float32)
     else:
         raise ValueError("Input array must be 1D or 2D.")
     
     # Encode each number in the input_array
     if input_array.ndim == 2:
-        for i in range(windows_size):
-            for j in range(seq_len):
+        for i in range(seq_len):
+            for j in range(d_model):
                 number = int(input_array[i, j])
                 if 1 <= number <= num_classes:
                     binary_encoded_array[i, number] = 1.0  # Adjust index for 0-based indexing
     elif input_array.ndim == 1:
-        for j in range(seq_len):
+        for j in range(d_model):
             number = int(input_array[j])
             if 0 <= number < num_classes:
                 binary_encoded_array[number] = 1.0
@@ -60,7 +60,7 @@ def binary_decode_array(binary_encoded_data, threshold=0.25, top_k=20):
     selecting the top_k classes with probabilities exceeding a given threshold.
     
     Parameters:
-    - binary_encoded_data: A 2D tensor or array of binary encoded data with shape (windows_size, num_classes).
+    - binary_encoded_data: A 2D tensor or array of binary encoded data with shape (seq_len, num_classes).
     - threshold: A float representing the cutoff threshold for determining whether a class is selected.
     - top_k: The number of highest probability classes to select after applying the threshold.
     
@@ -70,15 +70,15 @@ def binary_decode_array(binary_encoded_data, threshold=0.25, top_k=20):
     # sigmoid = torch.sigmoid(binary_encoded_data)  # Convert raw scores to probabilities
     sigmoid = binary_encoded_data
     if sigmoid.ndim == 1:
-        windows_size, num_classes = 1, sigmoid.shape[0]
+        seq_len, num_classes = 1, sigmoid.shape[0]
     elif sigmoid.ndim == 2:
-        windows_size, num_classes = sigmoid.shape
+        seq_len, num_classes = sigmoid.shape
     else:
         raise ValueError("Input binary encoded data must be 1D or 2D.")
     decoded_data = []
     
     if sigmoid.ndim == 2:
-        for i in range(windows_size):
+        for i in range(seq_len):
             # Apply threshold and get indices of classes with probabilities above the threshold
             above_threshold_indices = (sigmoid[i] > threshold).nonzero(as_tuple=True)[0]
             if len(above_threshold_indices) > 0:
@@ -113,22 +113,22 @@ def binary_decode_array(binary_encoded_data, threshold=0.25, top_k=20):
 
 def one_hot_encode_array(input_array, num_classes=80):
     """
-    Convert an input array of shape (windows_size, seq_len) to a one-hot encoded tensor of shape (windows_size, seq_len, num_classes).
+    Convert an input array of shape (seq_len, d_model) to a one-hot encoded tensor of shape (seq_len, d_model, num_classes).
     
     Parameters:
-    - input_array: An array of shape (windows_size, seq_len), where each row represents a time step and each element in the row represents a selected number.
+    - input_array: An array of shape (seq_len, d_model), where each row represents a time step and each element in the row represents a selected number.
     - num_classes: The total number of possible classes (e.g., 1 to 80).
     
     Returns:
-    - A one-hot encoded tensor of shape (windows_size, seq_len, num_classes).
+    - A one-hot encoded tensor of shape (seq_len, d_model, num_classes).
     """
-    windows_size, seq_len = input_array.shape
+    seq_len, d_model = input_array.shape
     # Initialize a tensor of zeros with the desired output shape
-    one_hot_encoded_array = torch.zeros((windows_size, seq_len, num_classes), dtype=torch.float32)
+    one_hot_encoded_array = torch.zeros((seq_len, d_model, num_classes), dtype=torch.float32)
     
     # Encode each number in the input_array
-    for i in range(windows_size):
-        for j in range(seq_len):
+    for i in range(seq_len):
+        for j in range(d_model):
             number = input_array[i, j]
             if 1 <= number <= num_classes:
                 one_hot_encoded_array[i, j, number - 1] = 1.0  # Adjust index for 0-based indexing
@@ -191,43 +191,51 @@ class PositionalEncoding(nn.Module):
 
 
 class Transformer_Model(nn.Module): 
-    def __init__(self, input_size, output_size=20, hidden_size=512, num_layers=8, num_heads=16, dropout=0.1, num_embeddings=20, embedding_dim=50, windows_size=30):
+    def __init__(self, input_size, output_size=20, hidden_size=512, num_layers=8, num_heads=16, dropout=0.1, num_embeddings=20, embedding_dim=50, seq_len=30):
         super(Transformer_Model, self).__init__()
 
         self.input_fc = nn.Linear(input_size, hidden_size)
         self.embedding = nn.Embedding(input_size, hidden_size)
-        self.positional_encoding = PositionalEncoding(hidden_size, max_len=int(input_size*1.2))
-        self.transformer_layer = nn.TransformerEncoderLayer(d_model=hidden_size, nhead=num_heads, dropout=dropout)
+        self.positional_encoding = PositionalEncoding(hidden_size, 
+                                                      max_len=int(input_size*1.2))
+        self.transformer_layer = nn.TransformerEncoderLayer(
+            d_model=hidden_size, 
+            nhead=num_heads, 
+            dropout=dropout)
         self.transformer_encoder = nn.TransformerEncoder(
             self.transformer_layer,
             num_layers)
         self.dropout = nn.Dropout(dropout)  # 添加 dropout 层
         self.linear = nn.Linear(hidden_size, output_size)
-        self.windows_size = windows_size
+        self.seq_len = seq_len
 
     def forward(self, x):
-        # x = x.long() # (batch_size, windows_size, seq_len)
-        x = x.view(x.size(0), -1) # (batch_size, windows_size * seq_len)
-        # embedded = self.embedding(x) #(batch_size, seq_len, hidden_size)
-        # embedded = embedded.permute(1, 0, 2) # (seq_len, batch_size, hidden_size)
+        # x = x.long() # (batch_size, seq_len, d_model)
+        # x = x.view(x.size(0), -1) # (batch_size, seq_len * d_model)
+        x = self.input_fc(x)  # (batch_size, seq_len * d_model) -> (batch_size, hidden_size)
+        embedded = x.permute(1, 0, 2)  # (batch_size, seq_len * d_model) -> (batch_size, hidden_size)
+        # embedded = self.embedding(x) #(batch_size, d_model, hidden_size)
+        # embedded = embedded.permute(1, 0, 2) # (d_model, batch_size, hidden_size)
         # embedded = self.dropout(embedded)
-        # positional_encoded = self.positional_encoding(embedded) 
-        positional_encoded = self.input_fc(x)
-        # x = x.view(x.size(0), self.windows_size, -1)  # (batch_size, windows_size * seq_len)
-        # positional_encoded = x.permute(1, 0, 2)  # (batch_size, windows_size, seq_len) -> (seq_len, batch_size, windows_size)
-        transformer_encoded = self.transformer_encoder(positional_encoded)  # (windows_size, batch_size, seq_len)
-        transformer_encoded = self.dropout(transformer_encoded)
+        positional_encoded = self.positional_encoding(embedded) 
+        # positional_encoded = self.input_fc(x)
+        # x = x.view(x.size(0), self.seq_len, -1)  # (batch_size, seq_len * d_model)
+        # positional_encoded = x.permute(1, 0, 2)  # (batch_size, seq_len, d_model) -> (d_model, batch_size, seq_len)
+        transformer_encoded = self.transformer_encoder(positional_encoded)  # (seq_len, batch_size, d_model)
+        # transformer_encoded = self.dropout(transformer_encoded)
+        transformer_encoded = transformer_encoded.permute(1, 0, 2)  # (d_model, batch_size, seq_len) -> (batch_size, seq_len, d_model)
+        transformer_encoded = transformer_encoded.mean(dim=1)  # (seq_len, batch_size, d_model) -> (batch_size, d_model)
         linear_out = self.linear(transformer_encoded)
         # linear_out = torch.sigmoid(linear_out)
         return linear_out
     
 class LSTM_Model(nn.Module): 
-    def __init__(self, input_size, output_size=20, hidden_size=512, num_layers=1, num_heads=16, dropout=0.1, num_embeddings=20, embedding_dim=50, windows_size=30):
+    def __init__(self, input_size, output_size=20, hidden_size=512, num_layers=1, num_heads=16, dropout=0.1, num_embeddings=20, embedding_dim=50, seq_len=30):
         super(LSTM_Model, self).__init__()
         self.embedding = nn.Embedding(num_embeddings+1, embedding_dim)
         # self.conv1d = nn.Conv1d(in_channels=input_size, out_channels=embedding_dim*input_size, kernel_size=3, padding=1)
-        # self.conv1d2 = nn.Conv1d(in_channels=windows_size*5, out_channels=embedding_dim*windows_size, kernel_size=3)
-        self.lstm = nn.LSTM(windows_size*12+input_size, hidden_size, num_layers, dropout=dropout, batch_first=True, bidirectional=True) # embedding_dim*20+(input_size-2) // embedding_dim*input_size+(windows_size-2)
+        # self.conv1d2 = nn.Conv1d(in_channels=seq_len*5, out_channels=embedding_dim*seq_len, kernel_size=3)
+        self.lstm = nn.LSTM(seq_len*12+input_size, hidden_size, num_layers, dropout=dropout, batch_first=True, bidirectional=True) # embedding_dim*20+(input_size-2) // embedding_dim*input_size+(seq_len-2)
         self.dropout = nn.Dropout(dropout)
         # self.attention = nn.Linear(hidden_size*2, 1)
         self.MultiheadAttention = nn.MultiheadAttention(embed_dim=hidden_size*2, num_heads=num_heads, dropout=dropout)
@@ -235,39 +243,39 @@ class LSTM_Model(nn.Module):
         self.input_size = input_size
 
     def forward(self, x):
-        # LSTM input: (batch_size, seq_length, input_size)
+        # LSTM input: (batch_size, d_modelgth, input_size)
         # x = x.view(x.size(0), x.size(1), -1)
-        # x: [batch_size, seq_length, num_indices]
+        # x: [batch_size, d_modelgth, num_indices]
         indices = x[:, :, :self.input_size].long()
         features = x[:, :, self.input_size:].float()
-        indices = self.embedding(indices)  # [batch_size, seq_length, num_indices] -> [batch_size, seq_length, num_indices, embedding_dim]
+        indices = self.embedding(indices)  # [batch_size, d_modelgth, num_indices] -> [batch_size, d_modelgth, num_indices, embedding_dim]
         
         # use conv1d to reduce the number of features
-        # indices = indices.permute(0, 2, 1, 3).contiguous() # [batch_size, seq_length, num_indices, embedding_dim] -> [batch_size, num_indices, seq_length, embedding_dim]
-        # indices = indices.view(indices.size(0), indices.size(1), -1)  # [batch_size, num_indices, seq_length, embedding_dim] -> [batch_size, num_indices, seq_length*embedding_dim]
-        # indices = self.conv1d(indices)  # [batch_size, num_indices, seq_length*embedding_dim] -> [batch_size, num_indices, seq_length*embedding_dim]
-        # indices = indices.permute(0, 2, 1).contiguous() # [batch_size, num_indices, seq_length*embedding_dim] -> [batch_size, seq_length*embedding_dim, num_indices]
-        # features = features.permute(0, 2, 1) # [batch_size, seq_length, num_features] -> [batch_size, num_features, seq_length]
-        # features = self.conv1d2(features) # [batch_size, num_features, seq_length] -> [batch_size, num_features, seq_length]
-        # # features = features.permute(0, 2, 1)  # [batch_size, num_features, seq_length] -> [batch_size, seq_length, num_features]
+        # indices = indices.permute(0, 2, 1, 3).contiguous() # [batch_size, d_modelgth, num_indices, embedding_dim] -> [batch_size, num_indices, d_modelgth, embedding_dim]
+        # indices = indices.view(indices.size(0), indices.size(1), -1)  # [batch_size, num_indices, d_modelgth, embedding_dim] -> [batch_size, num_indices, d_modelgth*embedding_dim]
+        # indices = self.conv1d(indices)  # [batch_size, num_indices, d_modelgth*embedding_dim] -> [batch_size, num_indices, d_modelgth*embedding_dim]
+        # indices = indices.permute(0, 2, 1).contiguous() # [batch_size, num_indices, d_modelgth*embedding_dim] -> [batch_size, d_modelgth*embedding_dim, num_indices]
+        # features = features.permute(0, 2, 1) # [batch_size, d_modelgth, num_features] -> [batch_size, num_features, d_modelgth]
+        # features = self.conv1d2(features) # [batch_size, num_features, d_modelgth] -> [batch_size, num_features, d_modelgth]
+        # # features = features.permute(0, 2, 1)  # [batch_size, num_features, d_modelgth] -> [batch_size, d_modelgth, num_features]
         
         # use max pooling to reduce the number of features
-        pooled_indices = F.max_pool2d(indices, (1, indices.shape[3])) # [batch_size, seq_length, num_indices, embedding_dim] -> [batch_size, seq_length, num_indices, 1]
-        pooled_indices = pooled_indices.squeeze(-1)  # [batch_size, seq_length, num_indices, 1] -> [batch_size, seq_length, num_indices]
+        pooled_indices = F.max_pool2d(indices, (1, indices.shape[3])) # [batch_size, d_modelgth, num_indices, embedding_dim] -> [batch_size, d_modelgth, num_indices, 1]
+        pooled_indices = pooled_indices.squeeze(-1)  # [batch_size, d_modelgth, num_indices, 1] -> [batch_size, d_modelgth, num_indices]
 
         combined = torch.cat([pooled_indices, features], dim=-1)
-        lstm_out, _ = self.lstm(combined)  # [batch_size, seq_length, hidden_size*2]
-        lstm_out = self.dropout(lstm_out) # [batch_size, seq_length, hidden_size*2]
+        lstm_out, _ = self.lstm(combined)  # [batch_size, d_modelgth, hidden_size*2]
+        lstm_out = self.dropout(lstm_out) # [batch_size, d_modelgth, hidden_size*2]
 
         # # Applying attention
         # attention_weights = F.softmax(self.attention(lstm_out), dim=1)
         # context_vector = torch.sum(attention_weights * lstm_out, dim=1)
 
         # Applying multihead attention
-        lstm_out =lstm_out.permute(1, 0, 2)  # [batch_size, seq_length, hidden_size*2] -> [seq_length, batch_size, hidden_size*2]
+        lstm_out =lstm_out.permute(1, 0, 2)  # [batch_size, d_modelgth, hidden_size*2] -> [d_modelgth, batch_size, hidden_size*2]
         context_vector, _ = self.MultiheadAttention(lstm_out, lstm_out, lstm_out)
-        context_vector = context_vector.permute(1, 0, 2)  # [seq_length, batch_size, hidden_size*2] -> [batch_size, seq_length, hidden_size*2]
-        context_vector = context_vector[:, -1, :] # [batch_size, seq_length, hidden_size*2] -> [batch_size, hidden_size*2]
+        context_vector = context_vector.permute(1, 0, 2)  # [d_modelgth, batch_size, hidden_size*2] -> [batch_size, d_modelgth, hidden_size*2]
+        context_vector = context_vector[:, -1, :] # [batch_size, d_modelgth, hidden_size*2] -> [batch_size, hidden_size*2]
         linear_out = self.linear(context_vector)
 
         # Get the last output
@@ -567,10 +575,10 @@ class TransformerModel(nn.Module):
         self.linear = nn.Linear(input_size, output_size)
     
     def forward(self, x):
-        x = x.permute(1, 0, 2) # 将输入序列转置为 (seq_len, batch_size, input_size)
+        x = x.permute(1, 0, 2) # 将输入序列转置为 (d_model, batch_size, input_size)
         x = self.transformer(x, x) # 使用 Transformer 进行编码和解码
         x = self.dropout(x)  # 在 Transformer 后添加 dropout
-        x = x.permute(1, 0, 2) # 将输出序列转置为 (batch_size, seq_len, input_size)
-        x = self.linear(x) # 对输出进行线性变换(batch_size, seq_len, output_size)
+        x = x.permute(1, 0, 2) # 将输出序列转置为 (batch_size, d_model, input_size)
+        x = self.linear(x) # 对输出进行线性变换(batch_size, d_model, output_size)
         x = x[:, -1, :] # 取最后一个时间步的输出作为模型的输出(batch_size, output_size)
         return x

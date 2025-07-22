@@ -165,7 +165,7 @@ def get_current_number(name):
         current_num = soup.find("div", class_="wrap_datachart").find("input", id="end")["value"]
     return current_num
 
-def spider_cq(name="kl8", start=1, end=999999, mode="train", windows_size=0):
+def spider_cq(name="kl8", start=1, end=999999, mode="train", seq_len=0):
     syspath = name_path[name]["path"]
     if not os.path.exists(syspath):
         os.makedirs(syspath)
@@ -193,8 +193,8 @@ def spider_cq(name="kl8", start=1, end=999999, mode="train", windows_size=0):
     elif name == "kl8" and mode == "predict":
         ori_data = pd.read_csv("{}{}".format(syspath, data_cq_file_name))  
         data = []
-        if windows_size > 0:
-            ori_data = ori_data[0:windows_size]
+        if seq_len > 0:
+            ori_data = ori_data[0:seq_len]
         for i in range(len(ori_data)):
             item = dict()
             item[u"期数"] = ori_data.iloc[i, 1]
@@ -205,7 +205,7 @@ def spider_cq(name="kl8", start=1, end=999999, mode="train", windows_size=0):
     else:
         spider(name, start, end, mode)
 
-def spider(name="ssq", start=1, end=999999, mode="train", windows_size=0):
+def spider(name="ssq", start=1, end=999999, mode="train", seq_len=0):
     """ 爬取历史数据
     :param name 玩法
     :param start 开始一期
@@ -272,11 +272,11 @@ def spider(name="ssq", start=1, end=999999, mode="train", windows_size=0):
     elif mode == "predict":
         ori_data = pd.read_csv("{}{}".format(syspath, data_file_name))  
         data = []
-        if windows_size > 0:
-            ori_data = ori_data[0:windows_size]
+        if seq_len > 0:
+            ori_data = ori_data[0:seq_len]
         for i in range(len(ori_data)):
             item = dict()
-            if (ori_data.iloc[i, 1] < int(start) or ori_data.iloc[i, 1] > int(end)) and windows_size == 0:
+            if (ori_data.iloc[i, 1] < int(start) or ori_data.iloc[i, 1] > int(end)) and seq_len == 0:
                 continue
             if name == "ssq":
                 item[u"期数"] = ori_data.iloc[i, 1]
@@ -344,14 +344,14 @@ def predict_ball_model(name, dataset, sequence_len, sub_name="红球", window_si
         _model = modeling.Transformer_Model
     elif model_name == "LSTM":
         _model = modeling.LSTM_Model
-    # model = _model(input_size=input_size, output_size=output_size, hidden_size=hidden_size, num_layers=num_layers, num_heads=num_heads, dropout=0.5, num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)], embedding_dim=embedding_dim, windows_size=window_size).to(device)
+    # model = _model(input_size=input_size, output_size=output_size, hidden_size=hidden_size, num_layers=num_layers, num_heads=num_heads, dropout=0.5, num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)], embedding_dim=embedding_dim, seq_len=window_size).to(device)
     if os.path.exists("{}{}_ball_model_pytorch_{}.ckpt".format(syspath, sub_name_eng, model_name)):
         # model.load_state_dict(torch.load("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)))
         checkpoint = torch.load("{}{}_ball_model_pytorch_{}.ckpt".format(syspath, sub_name_eng, model_name))
-        if 'windows_size' in checkpoint and 'hidden_size' in checkpoint and 'num_layers' in checkpoint and 'num_heads' in checkpoint:
-            if checkpoint['windows_size'] != args.windows_size or checkpoint['hidden_size'] != args.hidden_size or checkpoint['num_layers'] != args.num_layers or checkpoint['num_heads'] != args.num_heads:
+        if 'seq_len' in checkpoint and 'hidden_size' in checkpoint and 'num_layers' in checkpoint and 'num_heads' in checkpoint:
+            if checkpoint['seq_len'] != args.seq_len or checkpoint['hidden_size'] != args.hidden_size or checkpoint['num_layers'] != args.num_layers or checkpoint['num_heads'] != args.num_heads:
                 logger.info("当前为预测模式，将自动调整训练参数！")
-                args.windows_size = checkpoint['windows_size']
+                args.seq_len = checkpoint['seq_len']
                 args.hidden_size = checkpoint['hidden_size']
                 args.num_layers = checkpoint['num_layers']
                 args.num_heads = checkpoint['num_heads']
@@ -363,16 +363,16 @@ def predict_ball_model(name, dataset, sequence_len, sub_name="红球", window_si
                 #                 dropout=0.5, \
                 #                 num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)], \
                 #                 embedding_dim=embedding_dim, \
-                #                 windows_size=window_size).to(device)
+                #                 seq_len=window_size).to(device)
                 if args.model == "Transformer":
-                    model = _model(input_size=int(args.windows_size)*int(args.hidden_size), 
+                    model = _model(input_size=int(args.seq_len)*int(args.hidden_size), 
                                 output_size=output_size, 
                                 hidden_size=int(args.hidden_size), 
                                 num_layers=int(args.num_layers), 
                                 num_heads=int(args.num_heads), 
                                 dropout=0.5).to(device)
                 elif args.model == "LSTM":
-                    model = _model(input_size=int(args.windows_size)*int(args.hidden_size), 
+                    model = _model(input_size=int(args.seq_len)*int(args.hidden_size), 
                                 output_size=output_size, 
                                 hidden_size=int(args.hidden_size), 
                                 num_layers=int(args.num_layers), 
@@ -380,7 +380,7 @@ def predict_ball_model(name, dataset, sequence_len, sub_name="红球", window_si
                                 dropout=0.5, 
                                 num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)], 
                                 embedding_dim=embedding_dim, 
-                                windows_size=int(args.windows_size)).to(device)
+                                seq_len=int(args.seq_len)).to(device)
         else:
             logger.info("模型不是最新版本，建议重新训练！")
         model.load_state_dict(checkpoint['model_state_dict'])
@@ -402,7 +402,7 @@ def predict_ball_model(name, dataset, sequence_len, sub_name="红球", window_si
                         dropout=0.5, 
                         num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)], 
                         embedding_dim=embedding_dim, 
-                        windows_size=int(args.windows_size)).to(device)
+                        seq_len=int(args.seq_len)).to(device)
     model.eval()
     for batch in dataloader:
         x, y = batch
@@ -417,18 +417,18 @@ def run_predict(window_size, sequence_len, hidden_size=128, num_layers=8, num_he
     for sub_name_eng in balls:
         sub_name = "红球" if sub_name_eng == "red" else "蓝球"
         if window_size != 0:
-            model_args[mini_args.name]["model_args"]["windows_size"] = window_size
-        syspath = model_path + model_args[mini_args.name]["pathname"]['name'] + str(mini_args.windows_size) + model_args[mini_args.name]["subpath"][sub_name_eng]
-        # redpath = model_path + model_args[mini_args.name]["pathname"]['name'] + str(model_args[mini_args.name]["model_args"]["windows_size"]) + model_args[mini_args.name]["subpath"]['red']
-        # bluepath = model_path + model_args[mini_args.name]["pathname"]['name'] + str(model_args[mini_args.name]["model_args"]["windows_size"]) + model_args[mini_args.name]["subpath"]['blue']
+            model_args[mini_args.name]["model_args"]["seq_len"] = window_size
+        syspath = model_path + model_args[mini_args.name]["pathname"]['name'] + str(mini_args.seq_len) + model_args[mini_args.name]["subpath"][sub_name_eng]
+        # redpath = model_path + model_args[mini_args.name]["pathname"]['name'] + str(model_args[mini_args.name]["model_args"]["seq_len"]) + model_args[mini_args.name]["subpath"]['red']
+        # bluepath = model_path + model_args[mini_args.name]["pathname"]['name'] + str(model_args[mini_args.name]["model_args"]["seq_len"]) + model_args[mini_args.name]["subpath"]['blue']
         # model = modeling.TransformerModel(input_size=20, output_size=20).to(device)
         if os.path.exists("{}{}_ball_model_pytorch_{}.ckpt".format(syspath, sub_name_eng, model)):
             # model.load_state_dict(torch.load("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)))
-            # logger.info("已加载{}模型！窗口大小:{}".format(sub_name, model_args[mini_args.name]["model_args"]["windows_size"]))
+            # logger.info("已加载{}模型！窗口大小:{}".format(sub_name, model_args[mini_args.name]["model_args"]["seq_len"]))
             current_number = get_current_number(mini_args.name)
             logger.info("【{}】最近一期:{}".format(name_path[mini_args.name]["name"], current_number))
             logger.info("正在创建【{}】数据集...".format(name_path[mini_args.name]["name"]))
-            data = create_train_data(mini_args.name, model_args[mini_args.name]["model_args"]["windows_size"], 1, sub_name_eng, mini_args.cq,f_data=f_data, model=model, test_flag=2)
+            data = create_train_data(mini_args.name, model_args[mini_args.name]["model_args"]["seq_len"], 1, sub_name_eng, mini_args.cq,f_data=f_data, model=model, test_flag=2)
             # name, dataset, sequence_len, sub_name="红球", window_size=1, hidden_size=128, num_layers=8, num_heads=16, input_size=20, output_size=20, model_name="Transformer", args=None, device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),embedding_dim=50
             y_pred, name_list, y_target = predict_ball_model(name=mini_args.name, \
                                                                 dataset=data, \
@@ -498,19 +498,19 @@ def get_year():
     return int(str(datetime.datetime.now().year)[-2:])
 
 
-def try_error(name, predict_features, windows_size):
+def try_error(name, predict_features, seq_len):
     """ 处理异常
     """
-    if len(predict_features) != windows_size:
+    if len(predict_features) != seq_len:
         logger.warning("期号出现跳期，期号不连续！开始查找最近上一期期号！本期预测时间较久！")
         last_current_year = (get_year() - 1) * 1000
         max_times = 160
-        while len(predict_features) != windows_size:
+        while len(predict_features) != seq_len:
             # predict_features = spider(name, last_current_year + max_times, get_current_number(name), "predict")[[x[0] for x in ball_name]]
             if mini_args.cq == 0:
-                predict_features = spider(name, last_current_year + max_times, get_current_number(name), "predict", windows_size)
+                predict_features = spider(name, last_current_year + max_times, get_current_number(name), "predict", seq_len)
             else:
-                predict_features = spider_cq(name, last_current_year + max_times, get_current_number(name), "predict", windows_size)
+                predict_features = spider_cq(name, last_current_year + max_times, get_current_number(name), "predict", seq_len)
             # time.sleep(np.random.random(1).tolist()[0])
             max_times -= 1
         return predict_features
@@ -520,37 +520,37 @@ def try_error(name, predict_features, windows_size):
 #     """" 最终预测函数
 #     """
 #     m_args = model_args[name]["model_args"]
-#     windows_size = model_args[name]["model_args"]["windows_size"]
+#     seq_len = model_args[name]["model_args"]["seq_len"]
 #     current_number = get_current_number(mini_args.name)
 #     logger.info("正在创建【{}】数据集...".format(name_path[name]["name"]))
-#     red_data = create_train_data(name, windows_size, 1, "red")
-#     blue_data = create_train_data(name, windows_size, 1, "blue")
-#     logger.info("【{}】预测期号：{} 窗口大小:{}".format(name_path[name]["name"], int(current_number) + 1, windows_size))
+#     red_data = create_train_data(name, seq_len, 1, "red")
+#     blue_data = create_train_data(name, seq_len, 1, "blue")
+#     logger.info("【{}】预测期号：{} 窗口大小:{}".format(name_path[name]["name"], int(current_number) + 1, seq_len))
 #     if name == "ssq":
-#         red_pred, red_name_list = get_red_ball_predict_result(red_data, m_args["sequence_len"], m_args["windows_size"])
-#         blue_pred = get_blue_ball_predict_result(name, blue_data, 0, m_args["windows_size"])
+#         red_pred, red_name_list = get_red_ball_predict_result(red_data, m_args["sequence_len"], m_args["seq_len"])
+#         blue_pred = get_blue_ball_predict_result(name, blue_data, 0, m_args["seq_len"])
 #         ball_name_list = ["{}_{}".format(name[mode], i) for name, i in red_name_list] + [ball_name[1][mode]]
 #         pred_result_list = red_pred[0].tolist() + blue_pred.tolist()
 #         return {
 #             b_name: int(res) + 1 for b_name, res in zip(ball_name_list, pred_result_list)
 #         }
 #     elif name == "dlt":
-#         red_pred, red_name_list = get_red_ball_predict_result(red_data, m_args["red_sequence_len"], m_args["windows_size"])
-#         blue_pred, blue_name_list = get_blue_ball_predict_result(name, blue_data, m_args["blue_sequence_len"], m_args["windows_size"])
+#         red_pred, red_name_list = get_red_ball_predict_result(red_data, m_args["red_sequence_len"], m_args["seq_len"])
+#         blue_pred, blue_name_list = get_blue_ball_predict_result(name, blue_data, m_args["blue_sequence_len"], m_args["seq_len"])
 #         ball_name_list = ["{}_{}".format(name[mode], i) for name, i in red_name_list] + ["{}_{}".format(name[mode], i) for name, i in blue_name_list]
 #         pred_result_list = red_pred[0].tolist() + blue_pred[0].tolist()
 #         return {
 #             b_name: int(res) + 1 for b_name, res in zip(ball_name_list, pred_result_list)
 #         }
 #     elif name == "pls":
-#         red_pred, red_name_list = get_red_ball_predict_result(red_data, m_args["red_sequence_len"], m_args["windows_size"])
+#         red_pred, red_name_list = get_red_ball_predict_result(red_data, m_args["red_sequence_len"], m_args["seq_len"])
 #         ball_name_list = ["{}_{}".format(name[mode], i) for name, i in red_name_list]
 #         pred_result_list = red_pred[0].tolist()
 #         return {
 #             b_name: int(res) for b_name, res in zip(ball_name_list, pred_result_list)
 #         }
 #     elif name == "kl8":
-#         red_pred, red_name_list = get_red_ball_predict_result(red_data, m_args["red_sequence_len"], m_args["windows_size"])
+#         red_pred, red_name_list = get_red_ball_predict_result(red_data, m_args["red_sequence_len"], m_args["seq_len"])
 #         ball_name_list = ["{}_{}".format(name[mode], i) for name, i in red_name_list]
 #         pred_result_list = red_pred[0].tolist()
 #         return {
@@ -559,8 +559,8 @@ def try_error(name, predict_features, windows_size):
 
 # def predict_run(name):
 #     global filedata, filetitle
-#     windows_size = model_args[name]["model_args"]["windows_size"]
-#     diff_number = windows_size - 1
+#     seq_len = model_args[name]["model_args"]["seq_len"]
+#     diff_number = seq_len - 1
 #     # logger.info("预测结果：{}".format(get_final_result(name, predict_features_)))
 #     predict_dict = get_final_result(name)
 #     ans = ""

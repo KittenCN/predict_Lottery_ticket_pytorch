@@ -43,7 +43,7 @@ model_path = os.getcwd() + "/model/"
 model_args = {
     "kl8": {
         "model_args": {
-            "windows_size": 3,
+            "seq_len": 3,
             "batch_size": 1,
             "red_sequence_len": 20,
             "sequence_len": 20,
@@ -83,7 +83,7 @@ model_args = {
     },
     "pls": {
         "model_args": {
-            "windows_size": 3,
+            "seq_len": 3,
             "batch_size": 1,
             "red_sequence_len": 3,
             "sequence_len": 3,
@@ -123,7 +123,7 @@ model_args = {
     },
     "ssq": {
         "model_args": {
-            "windows_size": 3,
+            "seq_len": 3,
             "batch_size": 1,
             "red_sequence_len": 6,
             "sequence_len": 6,
@@ -163,7 +163,7 @@ model_args = {
     },
     "dlt": {
         "model_args": {
-            "windows_size": 3,
+            "seq_len": 3,
             "batch_size": 1,
             "red_sequence_len": 5,
             "red_n_class": 35,

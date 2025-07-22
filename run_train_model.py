@@ -25,7 +25,7 @@ from torch.utils.tensorboard import SummaryWriter   # to print to tensorboard
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--name', default="kl8", type=str, help="选择训练数据")
-parser.add_argument('--windows_size', default='5', type=str, help="训练窗口大小,如有多个，用'，'隔开")
+parser.add_argument('--seq_len', default='5', type=str, help="训练窗口大小,如有多个，用'，'隔开")
 parser.add_argument('--red_epochs', default=100, type=int, help="红球训练轮数")
 parser.add_argument('--blue_epochs', default=1, type=int, help="蓝球训练轮数")
 parser.add_argument('--batch_size', default=32, type=int, help="集合数量")
@@ -95,7 +95,7 @@ def save_model(model, optimizer, lr_scheduler, scaler, epoch, syspath, ball_mode
         'scaler_state_dict': scaler_state_dict,
         'epoch': epoch,
         'start_dt': start_dt,
-        'windows_size': args.windows_size,
+        'seq_len': args.seq_len,
         'hidden_size': args.hidden_size,
         'num_layers': args.num_layers,
         'num_heads': args.num_heads,
@@ -117,18 +117,18 @@ def load_model(m_args, syspath, sub_name_eng, model, optimizer, lr_scheduler, sc
     if os.path.exists(address):
         # model.load_state_dict(torch.load("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)))
         checkpoint = torch.load(address, map_location=device)
-        if 'windows_size' in checkpoint  and 'hidden_size' in checkpoint and 'num_layers' in checkpoint and 'num_heads' in checkpoint:
-            if checkpoint['windows_size'] != args.windows_size or  checkpoint['hidden_size'] != args.hidden_size or checkpoint['num_layers'] != args.num_layers or checkpoint['num_heads'] != args.num_heads:
+        if 'seq_len' in checkpoint  and 'hidden_size' in checkpoint and 'num_layers' in checkpoint and 'num_heads' in checkpoint:
+            if checkpoint['seq_len'] != args.seq_len or  checkpoint['hidden_size'] != args.hidden_size or checkpoint['num_layers'] != args.num_layers or checkpoint['num_heads'] != args.num_heads:
                 logger.info("模型参数不一致！")
-                logger.info("保存的参数为: windows_size: {}, hidden_size: {}, num_layers: {}, num_heads: {}".format(checkpoint['windows_size'], checkpoint['hidden_size'], checkpoint['num_layers'], checkpoint['num_heads']))
+                logger.info("保存的参数为: seq_len: {}, hidden_size: {}, num_layers: {}, num_heads: {}".format(checkpoint['seq_len'], checkpoint['hidden_size'], checkpoint['num_layers'], checkpoint['num_heads']))
                 if args.train_mode in [0, 2]:
                     logger.info("当前为继续训练模式，将自动调整训练参数！")
-                    args.windows_size = checkpoint['windows_size']
+                    args.seq_len = checkpoint['seq_len']
                     args.hidden_size = checkpoint['hidden_size']
                     args.num_layers = checkpoint['num_layers']
                     args.num_heads = checkpoint['num_heads']
                     if args.model == "Transformer":
-                        model = _model(input_size=(m_args["model_args"]["{}_sequence_len".format(sub_name_eng)]+modeling.extra_classes)*m_args["model_args"]["windows_size"], 
+                        model = _model(input_size=(m_args["model_args"]["{}_sequence_len".format(sub_name_eng)]+modeling.extra_classes), 
                                        output_size=m_args["model_args"]["{}_sequence_len".format(sub_name_eng)], 
                                        hidden_size=args.hidden_size, 
                                        num_layers=args.num_layers, 
@@ -136,7 +136,7 @@ def load_model(m_args, syspath, sub_name_eng, model, optimizer, lr_scheduler, sc
                                        dropout=0.5, 
                                        num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)], 
                                        embedding_dim=50, 
-                                       windows_size=int(args.windows_size)).to(device)
+                                       seq_len=int(args.seq_len)).to(device)
                     elif args.model == "LSTM":
                         model = _model(input_size=m_args["model_args"]["{}_sequence_len".format(sub_name_eng)], 
                                        output_size=(m_args["model_args"]["{}_sequence_len".format(sub_name_eng)]+modeling.extra_classes)*m_args["model_args"]["{}_n_class".format(sub_name_eng)], 
@@ -146,7 +146,7 @@ def load_model(m_args, syspath, sub_name_eng, model, optimizer, lr_scheduler, sc
                                        dropout=0.5, 
                                        num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)], 
                                        embedding_dim=50, 
-                                       windows_size=int(args.windows_size)).to(device)
+                                       seq_len=int(args.seq_len)).to(device)
                     optimizer = optim.Adam(model.parameters(), lr=args.lr)
                     lr_scheduler = modeling.CustomSchedule(optimizer=optimizer, 
                                                            d_model=args.hidden_size, 
@@ -197,14 +197,14 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     sub_name_eng = "red" if sub_name == "红球" else "blue"
     ball_model_name = red_ball_model_name if sub_name == "红球" else blue_ball_model_name
     m_args = model_args[name]
-    syspath = model_path + model_args[args.name]["pathname"]['name'] + str(m_args["model_args"]["windows_size"]) + model_args[args.name]["subpath"][sub_name_eng]
+    syspath = model_path + model_args[args.name]["pathname"]['name'] + str(m_args["model_args"]["seq_len"]) + model_args[args.name]["subpath"][sub_name_eng]
     if not os.path.exists(syspath):
         os.makedirs(syspath)
     logger.info("标签数据维度: {}".format(dataset.data.shape))
     # 定义模型和优化器
     # args.hidden_size = m_args["model_args"]["{}_n_class".format(sub_name_eng)]+modeling.extra_classes
     if args.model == "Transformer":
-        model = _model(input_size=((m_args["model_args"]["{}_sequence_len".format(sub_name_eng)])+modeling.extra_classes)*m_args["model_args"]["windows_size"], 
+        model = _model(input_size=((m_args["model_args"]["{}_sequence_len".format(sub_name_eng)])+modeling.extra_classes), 
                        output_size=m_args["model_args"]["{}_sequence_len".format(sub_name_eng)], 
                        hidden_size=args.hidden_size, 
                        num_layers=args.num_layers, 
@@ -212,7 +212,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
                        dropout=0.5, 
                        num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)], 
                        embedding_dim=50, 
-                       windows_size=int(args.windows_size)).to(device)
+                       seq_len=int(args.seq_len)).to(device)
     elif args.model == "LSTM":
         model = _model(input_size=m_args["model_args"]["{}_sequence_len".format(sub_name_eng)]+modeling.extra_classes, 
                        output_size=(m_args["model_args"]["{}_sequence_len".format(sub_name_eng)]+modeling.extra_classes)*m_args["model_args"]["{}_n_class".format(sub_name_eng)], 
@@ -222,7 +222,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
                        dropout=0.5, 
                        num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)], 
                        embedding_dim=50, 
-                       windows_size=int(args.windows_size)).to(device)
+                       seq_len=int(args.seq_len)).to(device)
     if torch.cuda.device_count() >= 1:
         if torch.cuda.device_count() > 1:
             model = nn.DataParallel(model)
@@ -266,20 +266,20 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
         logger.info("读取已保存的测试数据集，将重新载入数据！")
         args.split_time = split_time
         test_list = _test_list
-        red_train_data = create_train_data(name=args.name, windows=model_args[name]["model_args"]["windows_size"], 
+        red_train_data = create_train_data(name=args.name, windows=model_args[name]["model_args"]["seq_len"], 
                                            dataset=1, ball_type="red", cq=args.cq, test_flag=0, test_begin=args.split_time, 
                                            f_data=0, model=args.model, num_classes=model_args[name]["model_args"]["red_n_class"], 
                                            test_list=test_list)
         if args.split_time != 0:
-            red_test_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "red", args.cq, 1, 
+            red_test_data = create_train_data(args.name, model_args[name]["model_args"]["seq_len"], 1, "red", args.cq, 1, 
                                               args.split_time, model=args.model, num_classes=model_args[name]["model_args"]["red_n_class"], 
                                               test_list=test_list)
         if name not in ["kl8"]:
-            blue_train_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "blue", args.cq, 0, 
+            blue_train_data = create_train_data(args.name, model_args[name]["model_args"]["seq_len"], 1, "blue", args.cq, 0, 
                                                 args.split_time, model=args.model, num_classes=model_args[name]["model_args"]["blue_n_class"], 
                                                 test_list=test_list)
             if args.split_time != 0:
-                blue_test_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "blue", args.cq, 1, 
+                blue_test_data = create_train_data(args.name, model_args[name]["model_args"]["seq_len"], 1, "blue", args.cq, 1, 
                                                    args.split_time, model=args.model, num_classes=model_args[name]["model_args"]["blue_n_class"], 
                                                    test_list=test_list)
         if sub_name_eng == "red":
@@ -485,19 +485,19 @@ def action(name):
             for item in range(int(ori_data[ori_data['期数'] == test_list[0]]['Unnamed: 0']) - 1, int(ori_data[ori_data['期数'] == test_list[0]]['Unnamed: 0']) - _n_samples, -1):
                 test_list.append(int(ori_data[ori_data['Unnamed: 0'] == item]['期数']))
     # name, windows, dataset=0, ball_type="red", cq=0, test_flag=0, test_begin=2021351, f_data=0, model="Transformer"
-    red_train_data = create_train_data(name=args.name, windows=model_args[name]["model_args"]["windows_size"], 
+    red_train_data = create_train_data(name=args.name, windows=model_args[name]["model_args"]["seq_len"], 
                                        dataset=1, ball_type="red", cq=args.cq, test_flag=0, test_begin=args.split_time, 
                                        f_data=0, model=args.model, num_classes=model_args[name]["model_args"]["red_n_class"], test_list=test_list)
     if args.split_time != 0:
-        red_test_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "red", 
+        red_test_data = create_train_data(args.name, model_args[name]["model_args"]["seq_len"], 1, "red", 
                                           args.cq, 1, args.split_time, model=args.model, num_classes=model_args[name]["model_args"]["red_n_class"], 
                                           test_list=test_list)
     if name not in ["kl8"]:
-        blue_train_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "blue", 
+        blue_train_data = create_train_data(args.name, model_args[name]["model_args"]["seq_len"], 1, "blue", 
                                             args.cq, 0, args.split_time, model=args.model, num_classes=model_args[name]["model_args"]["blue_n_class"], 
                                             test_list=test_list)
         if args.split_time != 0:
-            blue_test_data = create_train_data(args.name, model_args[name]["model_args"]["windows_size"], 1, "blue", 
+            blue_test_data = create_train_data(args.name, model_args[name]["model_args"]["seq_len"], 1, "blue", 
                                                args.cq, 1, args.split_time, model=args.model, num_classes=model_args[name]["model_args"]["blue_n_class"], 
                                                test_list=test_list)
     for i in range(args.epochs):
@@ -517,25 +517,25 @@ def action(name):
             logger.info("训练耗时: {:.4f}".format(time.time() - start_time))
 
 
-def run(name, windows_size):
+def run(name, seq_len):
     """ 执行训练
     :param name: 玩法
     :return:
     """
     total_start_time = time.time()
-    if int(windows_size[0]) == 0:
+    if int(seq_len[0]) == 0:
         action(name)
     else:
-        for size in windows_size:
-            model_args[name]["model_args"]["windows_size"] = int(size)
+        for size in seq_len:
+            model_args[name]["model_args"]["seq_len"] = int(size)
             action(name)
     logger.info("训练总耗时: {:.4f}".format(time.time() - total_start_time))
 
 if __name__ == '__main__':
-    list_windows_size = args.windows_size.split(",")
+    list_seq_len = args.seq_len.split(",")
     if not args.name:
         raise Exception("玩法名称不能为空！")
-    elif not args.windows_size:
+    elif not args.seq_len:
         raise Exception("窗口大小不能为空！")
     else:
         if args.download_data == 1 and args.predict_pro == 0 and int(time.strftime("%H", time.localtime())) < 20:
@@ -545,19 +545,19 @@ if __name__ == '__main__':
         model_args[args.name]["model_args"]["blue_epochs"] = int(args.blue_epochs)
         model_args[args.name]["model_args"]["batch_size"] = int(args.batch_size)
         if args.predict_pro == 1:
-            list_windows_size = []
+            list_seq_len = []
             path = model_path + model_args[args.name]["pathname"]['name']
             dbtype_list = os.listdir(path)
             for dbtype in dbtype_list:
                 try:
-                    list_windows_size.append(int(dbtype))
+                    list_seq_len.append(int(dbtype))
                 except:
                     pass
-            if len(list_windows_size) == 0:
+            if len(list_seq_len) == 0:
                 raise Exception("没有找到训练模型！")
-            list_windows_size.sort(reverse=True)   
+            list_seq_len.sort(reverse=True)   
             logger.info(path)
-            logger.info("windows_size: {}".format(list_windows_size))
+            logger.info("seq_len: {}".format(list_seq_len))
             model_args[args.name]["model_args"]["red_epochs"] = 1
             model_args[args.name]["model_args"]["blue_epochs"] = 1
             model_args[args.name]["model_args"]["batch_size"] = 1
@@ -567,18 +567,18 @@ if __name__ == '__main__':
                 model_args[args.name]["model_args"]["blue_epochs"] = 1
             elif args.epochs <= 0:
                 raise Exception("训练轮数不能小于1！")
-            if list_windows_size[0] == "-1":
-                list_windows_size = []
+            if list_seq_len[0] == "-1":
+                list_seq_len = []
                 path = model_path + model_args[args.name]["pathname"]['name']
                 dbtype_list = os.listdir(path)
                 for dbtype in dbtype_list:
                     try:
-                        list_windows_size.append(int(dbtype))
+                        list_seq_len.append(int(dbtype))
                     except:
                         pass
-                if len(list_windows_size) == 0:
+                if len(list_seq_len) == 0:
                     raise Exception("没有找到训练模型！")
-                list_windows_size.sort(reverse=True)   
+                list_seq_len.sort(reverse=True)   
                 logger.info(path)
-                logger.info("windows_size: {}".format(list_windows_size))
-        run(args.name, list_windows_size)
+                logger.info("seq_len: {}".format(list_seq_len))
+        run(args.name, list_seq_len)
