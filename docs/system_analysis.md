@@ -1,3 +1,40 @@
+# system_analysis — 变更与风险修复记录
+
+本文件记录项目中高风险项的分析与修复状态，供 review 与后续迭代使用。
+
+已修复项：
+- checkpoint 中增加并恢复 extra_classes：训练保存与加载时会写入 `extra_classes`，加载时会恢复到 `src.modeling.extra_classes`，避免训练/预测时特征维度不一致导致 shape 错误。
+- 请求超时与重试：对爬虫与获取最新期号的 network 请求增加了 `timeout` 和一次重试保障，减少临时网络问题导致脚本中断。
+- 增加单元测试：新增 `tests/test_checkpoint_extra.py`，用于验证 checkpoint 中 `extra_classes` 的保存/恢复行为，同时修正测试导入路径以便在本仓库直接运行测试。
+
+部分已缓解但需后续跟进的项：
+- 损失函数与标签编码一致性（高风险）：训练代码已默认使用 `BCEWithLogitsLoss` 并在训练流程中将标签转换为 multi-hot（见 `scripts/train_model.py` 中 `to_multi_hot`），这已在训练路径中被使用，但建议补充更全面的单测（例如小批量前向/反向）来覆盖边界情况与 label 缺失场景。
+- 全局状态耦合：项目中仍有全局变量（`ori_data`、`mini_args`、`modeling.extra_classes` 等）。已在 checkpoint/load 流程中恢复 `extra_classes`，并在 `src.common.init()` 中提供重置函数。长期建议将这些状态封装进 Pipeline/Context 类以减少隐藏依赖。
+
+未修复的建议（需要额外工时）：
+- 将 scripts 转为可安装的 console_scripts entry points（当前通过 sys.path hack 支持）。建议发布包或使用 editable install 来简化运行环境。
+
+如何验证本次修复：
+1. 运行新增的单元测试：
+   - python tests/test_checkpoint_extra.py
+2. 运行新增的 smoke 集成测试：
+  - pytest tests/test_smoke_integration.py -q
+2. 运行已有测试：
+   - python tests/test_config.py
+   - python tests/test_modeling.py
+3. 运行数据采集确认网络逻辑：
+   - python scripts/get_data.py --name kl8 --cq 0
+
+附加验证：
+- 检查配置项 `src.config.HTTP_ALLOWLIST` 与 `src.config.HTTP_CACHE_DIR` 已存在，并根据需要调整允许域名或缓存目录。
+- 当网络不可达时，爬虫将尝试使用本地缓存（若存在），或按照指数退避后失败并抛出异常以便上层处理。
+
+下一步建议：
+- 为训练流程添加一个小规模 smoke test（创建随机数据，做一次前向和后向传播，检查 loss 可计算且 checkpoint 无错误）。
+- 逐步重构：将全局状态注入到函数签名或 Context 对象中，移除模块级可变状态。
+- 在爬虫中引入更完善的重试策略（如 tenacity），并对关键外部域名使用配置化白名单。
+
+更新时间: 2025-10-09
 # 项目技术分析报告
 
 ## 1. 技术原理概述

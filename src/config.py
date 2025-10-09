@@ -15,6 +15,20 @@ data_cq_file_name = "data_cq.csv"
 predict_path = "./predict/"
 result_path = './results/'
 
+# Network configuration for crawlers
+HTTP_ALLOWLIST = [
+    "datachart.500.com",
+    "917500.cn",
+]
+
+# Local cache directory for crawler fallback
+HTTP_CACHE_DIR = os.path.join(os.getcwd(), "data_cache")
+
+# HTTP retry/backoff defaults (used by src.common.get_http_session_with_backoff)
+HTTP_RETRIES = 3
+HTTP_BACKOFF_BASE = 0.5
+HTTP_REQUEST_DELAY = 0.0  # seconds between retries (additional to exponential backoff)
+
 name_path = {
     "ssq": {
         "name": "双色球",

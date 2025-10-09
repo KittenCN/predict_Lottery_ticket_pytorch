@@ -19,8 +19,10 @@ from tqdm import tqdm
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from src import modeling
-from src.common import create_train_data, get_data_run
+from src.common import create_train_data, get_data_run, to_multi_hot
+from src.pipeline import LotteryPipeline
 from src.config import *
+from src.common import init
 from loguru import logger
 from datetime import datetime as dt
 from prefetch_generator import BackgroundGenerator
@@ -73,6 +75,9 @@ red_test_data = None
 blue_train_data = None
 blue_test_data = None
 
+# Pipeline instance (initialized lazily)
+_PIPELINE = None
+
 if args.tensorboard == 1:
     if not os.path.exists('../tf-logs'):
         os.makedirs('../tf-logs')
@@ -88,18 +93,7 @@ class DataLoaderX(DataLoader):
         return BackgroundGenerator(super().__iter__())
 
 
-def to_multi_hot(y_values: torch.Tensor, num_classes: int, device: torch.device) -> torch.Tensor:
-    """将号码序列转换为多热向量，号码以 1 开始编号。"""
-    if num_classes <= 0:
-        return torch.zeros((y_values.size(0), 0), device=device)
-    y_indices = y_values.long() - 1  # 转换为 0 起始索引
-    valid_mask = (y_indices >= 0) & (y_indices < num_classes)
-    multi_hot = torch.zeros((y_values.size(0), num_classes), device=device)
-    if valid_mask.any():
-        rows, cols = torch.nonzero(valid_mask, as_tuple=True)
-        target_cols = y_indices[rows, cols]
-        multi_hot[rows, target_cols] = 1.0
-    return multi_hot
+# use to_multi_hot from src.common
 def save_model(model, optimizer, lr_scheduler, scaler, epoch, syspath, ball_model_name, other="", no_update_times=0):
     model_state_dict = model.state_dict()
     optimizer_state_dict = optimizer.state_dict()
@@ -121,6 +115,7 @@ def save_model(model, optimizer, lr_scheduler, scaler, epoch, syspath, ball_mode
         'split_time': args.split_time,
         'test_list': test_list,
         'best_loss': best_loss,
+        'extra_classes': modeling.extra_classes,
     }
     torch.save(save_dict, "{}{}_pytorch_{}{}.{}".format(syspath, ball_model_name, args.model, other, extension))
 
@@ -176,6 +171,13 @@ def load_model(m_args, syspath, sub_name_eng, model, optimizer, lr_scheduler, sc
         else:
             logger.info("模型不是最新版本，建议重新训练！")
         model.load_state_dict(checkpoint['model_state_dict'])
+        # restore extra_classes if saved in checkpoint
+        if 'extra_classes' in checkpoint:
+            try:
+                modeling.extra_classes = int(checkpoint['extra_classes'])
+                logger.info(f"Restored extra_classes={modeling.extra_classes} from checkpoint")
+            except Exception:
+                pass
         if args.init != 1:
             optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
             lr_scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
@@ -489,21 +491,19 @@ def action(name):
             for item in range(int(ori_data[ori_data['期数'] == test_list[0]]['Unnamed: 0']) - 1, int(ori_data[ori_data['期数'] == test_list[0]]['Unnamed: 0']) - _n_samples, -1):
                 test_list.append(int(ori_data[ori_data['Unnamed: 0'] == item]['期数']))
     # name, windows, dataset=0, ball_type="red", cq=0, test_flag=0, test_begin=2021351, f_data=0, model="Transformer"
-    red_train_data = create_train_data(name=args.name, windows=model_args[name]["model_args"]["seq_len"], 
-                                       dataset=1, ball_type="red", cq=args.cq, test_flag=0, test_begin=args.split_time, 
-                                       f_data=0, model=args.model, num_classes=model_args[name]["model_args"]["red_n_class"], test_list=test_list)
+    global _PIPELINE
+    if _PIPELINE is None:
+        _PIPELINE = LotteryPipeline()
+        _PIPELINE.set_args(args)
+    red_train_data = _PIPELINE.create_dataset(name=args.name, windows=model_args[name]["model_args"]["seq_len"], 
+                                               dataset=1, ball_type="red", cq=args.cq, test_flag=0, test_begin=args.split_time, 
+                                               f_data=0, model=args.model, num_classes=model_args[name]["model_args"]["red_n_class"], test_list=test_list)
     if args.split_time != 0:
-        red_test_data = create_train_data(args.name, model_args[name]["model_args"]["seq_len"], 1, "red", 
-                                          args.cq, 1, args.split_time, model=args.model, num_classes=model_args[name]["model_args"]["red_n_class"], 
-                                          test_list=test_list)
+        red_test_data = _PIPELINE.create_dataset(name=args.name, windows=model_args[name]["model_args"]["seq_len"], dataset=1, ball_type="red", cq=args.cq, test_flag=1, test_begin=args.split_time, f_data=0, model=args.model, num_classes=model_args[name]["model_args"]["red_n_class"], test_list=test_list)
     if name not in ["kl8"]:
-        blue_train_data = create_train_data(args.name, model_args[name]["model_args"]["seq_len"], 1, "blue", 
-                                            args.cq, 0, args.split_time, model=args.model, num_classes=model_args[name]["model_args"]["blue_n_class"], 
-                                            test_list=test_list)
+        blue_train_data = _PIPELINE.create_dataset(name=args.name, windows=model_args[name]["model_args"]["seq_len"], dataset=1, ball_type="blue", cq=args.cq, test_flag=0, test_begin=args.split_time, f_data=0, model=args.model, num_classes=model_args[name]["model_args"]["blue_n_class"], test_list=test_list)
         if args.split_time != 0:
-            blue_test_data = create_train_data(args.name, model_args[name]["model_args"]["seq_len"], 1, "blue", 
-                                               args.cq, 1, args.split_time, model=args.model, num_classes=model_args[name]["model_args"]["blue_n_class"], 
-                                               test_list=test_list)
+            blue_test_data = _PIPELINE.create_dataset(name=args.name, windows=model_args[name]["model_args"]["seq_len"], dataset=1, ball_type="blue", cq=args.cq, test_flag=1, test_begin=args.split_time, f_data=0, model=args.model, num_classes=model_args[name]["model_args"]["blue_n_class"], test_list=test_list)
     for i in range(args.epochs):
         if model_args[name]["model_args"]["red_epochs"] > 0:
             best_score = 999999999
@@ -536,6 +536,8 @@ def run(name, seq_len):
     logger.info("训练总耗时: {:.4f}".format(time.time() - total_start_time))
 
 if __name__ == '__main__':
+    # reset global state to avoid cross-run contamination
+    init()
     list_seq_len = args.seq_len.split(",")
     if not args.name:
         raise Exception("玩法名称不能为空！")
@@ -617,6 +619,8 @@ def main():
     parser.add_argument('--save_best_loss', default=0, type=int, help="save best loss model")
     parser.add_argument('--cpu', default=0, type=int, help="using cpu, 1: cpu, 0: checking gpu")
     args = parser.parse_args()
+    # reset global state to avoid cross-run contamination
+    init()
     
     # 执行原来的主逻辑
     list_seq_len = args.seq_len.split(",")

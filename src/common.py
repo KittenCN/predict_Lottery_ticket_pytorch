@@ -5,6 +5,8 @@ Author: KittenCN
 import urllib3
 import sys
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 import pandas as pd
 import torch
 import torch.nn.functional as F
@@ -18,6 +20,114 @@ from torch import nn
 from src.config import *
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+
+def get_http_session(retries=2, backoff_factor=0.3, status_forcelist=(500, 502, 504)):
+    """Create a requests.Session with retry/backoff configured."""
+    session = requests.Session()
+    retry = Retry(
+        total=retries,
+        read=retries,
+        connect=retries,
+        backoff_factor=backoff_factor,
+        status_forcelist=status_forcelist,
+        raise_on_status=False,
+    )
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount('http://', adapter)
+    session.mount('https://', adapter)
+    return session
+
+
+def get_http_session_with_backoff(url, retries=3, backoff_base=0.5, allowlist=None, timeout=10):
+    """Make a GET request to url with simple exponential backoff and optional domain allowlist.
+
+    Returns the requests.Response on success or raises the last exception.
+    """
+    from urllib.parse import urlparse
+    parsed = urlparse(url)
+    hostname = parsed.hostname or ''
+    # default allowlist from config
+    try:
+        from src.config import HTTP_ALLOWLIST, HTTP_CACHE_DIR
+    except Exception:
+        HTTP_ALLOWLIST = None
+        HTTP_CACHE_DIR = None
+
+    if allowlist is None:
+        allowlist = HTTP_ALLOWLIST
+    if allowlist is not None and hostname not in allowlist:
+        raise ValueError(f"Host {hostname} not in allowlist")
+
+    session = requests.Session()
+    last_exc = None
+    for attempt in range(1, retries + 1):
+        try:
+            resp = session.get(url, verify=False, timeout=timeout)
+            resp.raise_for_status()
+            return resp
+        except Exception as e:
+            last_exc = e
+            sleep_time = backoff_base * (2 ** (attempt - 1))
+            logger.warning(f"Request to {url} failed (attempt {attempt}/{retries}): {e}; retrying in {sleep_time}s")
+            import time
+            time.sleep(sleep_time)
+    # all attempts failed -> try cache fallback if configured
+    logger.error(f"All retries failed for {url}: {last_exc}")
+    try:
+        if HTTP_CACHE_DIR:
+            # create cache filename based on hostname + path
+            import hashlib
+            key = hashlib.sha256(url.encode('utf-8')).hexdigest()
+            cache_path = os.path.join(HTTP_CACHE_DIR, f"{key}.cache")
+            if os.path.exists(cache_path):
+                logger.warning(f"Using cached response for {url} from {cache_path}")
+                class CachedResp:
+                    def __init__(self, text):
+                        self.text = text
+                        self.status_code = 200
+
+                with open(cache_path, 'r', encoding='utf-8') as fh:
+                    txt = fh.read()
+                return CachedResp(txt)
+    except Exception:
+        pass
+    raise last_exc
+
+
+def to_multi_hot(y_values, num_classes: int, device=None):
+    """Convert a 2D tensor/array of number indices (1-based) to multi-hot float32 tensor.
+
+    Accepts torch.Tensor or numpy array. Returns torch.FloatTensor on given device (or cpu).
+    """
+    import numpy as _np
+    import torch as _torch
+
+    if device is None:
+        device = _torch.device('cpu')
+
+    # convert to torch tensor
+    if isinstance(y_values, _np.ndarray):
+        y_tensor = _torch.from_numpy(y_values)
+    else:
+        y_tensor = y_values
+
+    if y_tensor.ndim == 1:
+        y_tensor = y_tensor.unsqueeze(0)
+
+    batch = y_tensor.size(0)
+    multi_hot = _torch.zeros((batch, num_classes), dtype=_torch.float32, device=device)
+    # y_tensor expected shape [batch, k]
+    for i in range(batch):
+        row = y_tensor[i]
+        if row.numel() == 0:
+            continue
+        indices = row.long() - 1
+        valid_mask = (indices >= 0) & (indices < num_classes)
+        if valid_mask.any():
+            valid_indices = indices[valid_mask]
+            multi_hot[i, valid_indices] = 1.0
+    return multi_hot
 
 ori_data = None
 filedata = []
@@ -151,12 +261,17 @@ def get_current_number(name):
     :return: int
     """
     url, _ = get_url(name)
-    if name in ["qxc", "pls"]:
-        r = requests.get("{}{}".format(url, "inc/history.php"), verify=False)
-    elif name in ["ssq", "dlt"]:
-        r = requests.get("{}{}".format(url, "history.shtml"), verify=False)
-    elif name in ["kl8"]:
-        r = requests.get("{}{}".format(url, "newinc/jbzs_redblue.php"), verify=False)
+    # add timeout and simple retry
+    try:
+        if name in ["qxc", "pls"]:
+            r = get_http_session_with_backoff("{}{}".format(url, "inc/history.php"), timeout=10)
+        elif name in ["ssq", "dlt"]:
+            r = get_http_session_with_backoff("{}{}".format(url, "history.shtml"), timeout=10)
+        elif name in ["kl8"]:
+            r = get_http_session_with_backoff("{}{}".format(url, "newinc/jbzs_redblue.php"), timeout=10)
+    except Exception as e:
+        logger.warning(f"请求失败({e})，请检查网络或稍后重试")
+        raise
     r.encoding = "gb2312"
     soup = BeautifulSoup(r.text, "lxml")
     if name in ["kl8"]:
@@ -171,7 +286,25 @@ def spider_cq(name="kl8", start=1, end=999999, mode="train", seq_len=0):
         os.makedirs(syspath)
     if name == "kl8" and mode == "train":
         url = "https://data.917500.cn/kl81000_cq_asc.txt"
-        r = requests.get(url, headers = {'User-agent': 'chrome'})
+        # timeout and retry via session
+        session = get_http_session()
+        try:
+            r = get_http_session_with_backoff(url, retries=3, backoff_base=0.5, timeout=20)
+            # try to cache successful response
+            try:
+                from src.config import HTTP_CACHE_DIR
+                import hashlib
+                if HTTP_CACHE_DIR:
+                    os.makedirs(HTTP_CACHE_DIR, exist_ok=True)
+                    key = hashlib.sha256(url.encode('utf-8')).hexdigest()
+                    cache_path = os.path.join(HTTP_CACHE_DIR, f"{key}.cache")
+                    with open(cache_path, 'w', encoding='utf-8') as fh:
+                        fh.write(r.text)
+            except Exception:
+                pass
+        except Exception as e:
+            logger.warning(f"请求 {url} 失败({e})，放弃")
+            raise
         data = []
         lines = sorted(r.text.split('\n'), reverse=True)
         for line in lines:
@@ -220,7 +353,22 @@ def spider(name="ssq", start=1, end=999999, mode="train", seq_len=0):
         url, path = get_url(name)
         limit = int(end) - int(start) + 1
         url = "{}{}".format(url, path.format(int(start), int(end), limit))
-        r = requests.get(url=url, verify=False)
+        try:
+            r = get_http_session_with_backoff(url=url, retries=3, backoff_base=0.5, timeout=20)
+            try:
+                from src.config import HTTP_CACHE_DIR
+                import hashlib
+                if HTTP_CACHE_DIR:
+                    os.makedirs(HTTP_CACHE_DIR, exist_ok=True)
+                    key = hashlib.sha256(url.encode('utf-8')).hexdigest()
+                    cache_path = os.path.join(HTTP_CACHE_DIR, f"{key}.cache")
+                    with open(cache_path, 'w', encoding='utf-8') as fh:
+                        fh.write(r.text)
+            except Exception:
+                pass
+        except Exception as e:
+            logger.warning(f"请求 {url} 失败({e})，放弃")
+            raise
         r.encoding = "gb2312"
         soup = BeautifulSoup(r.text, "lxml")
         if name in ["ssq", "dlt", "kl8"]:
@@ -326,7 +474,9 @@ def predict_ball_model(name, dataset, num_classes, sub_name="红球", window_siz
     m_args = model_args[name]
     ball_index = 0 if sub_name == "红球" else 1
     name_list = [(ball_name[ball_index], i + 1) for i in range(num_classes)]
-    syspath = model_path + model_args[mini_args.name]["pathname"]['name'] + str(window_size) + model_args[mini_args.name]["subpath"][sub_name_eng]
+    # prefer explicit args (injected via LotteryPipeline.set_args) but fall back to global mini_args for compatibility
+    cur_args = args if args is not None else mini_args
+    syspath = model_path + model_args[cur_args.name]["pathname"]['name'] + str(window_size) + model_args[cur_args.name]["subpath"][sub_name_eng]
     if not os.path.exists(syspath):
         os.makedirs(syspath)
     logger.info("标签数据维度: {}".format(dataset.data.shape))
@@ -345,35 +495,48 @@ def predict_ball_model(name, dataset, num_classes, sub_name="红球", window_siz
     input_dim = input_size
 
     def build_model():
+        # use cur_args (which may be the injected args or the global mini_args)
+        use_args = cur_args
         if model_name == "Transformer":
             return _model(input_size=input_dim,
                           output_size=output_size,
-                          hidden_size=args.hidden_size,
-                          num_layers=args.num_layers,
-                          num_heads=args.num_heads,
+                          hidden_size=use_args.hidden_size,
+                          num_layers=use_args.num_layers,
+                          num_heads=use_args.num_heads,
                           dropout=0.5,
                           num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)],
                           embedding_dim=embedding_dim,
-                          seq_len=int(args.seq_len)).to(device)
+                          seq_len=int(use_args.seq_len)).to(device)
         return _model(input_size=input_dim,
                       output_size=output_size,
-                      hidden_size=args.hidden_size,
-                      num_layers=args.num_layers,
-                      num_heads=args.num_heads,
+                      hidden_size=use_args.hidden_size,
+                      num_layers=use_args.num_layers,
+                      num_heads=use_args.num_heads,
                       dropout=0.5,
                       num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)],
                       embedding_dim=embedding_dim,
-                      seq_len=int(args.seq_len)).to(device)
+                      seq_len=int(use_args.seq_len)).to(device)
 
     if os.path.exists(checkpoint_path):
         checkpoint = torch.load(checkpoint_path, map_location=device)
-        if args is not None and {'seq_len', 'hidden_size', 'num_layers', 'num_heads'}.issubset(checkpoint.keys()):
-            if checkpoint['seq_len'] != args.seq_len or checkpoint['hidden_size'] != args.hidden_size or checkpoint['num_layers'] != args.num_layers or checkpoint['num_heads'] != args.num_heads:
+        # restore extra_classes if saved in checkpoint
+        if 'extra_classes' in checkpoint:
+            try:
+                modeling.extra_classes = int(checkpoint['extra_classes'])
+                logger.info(f"Restored extra_classes={modeling.extra_classes} from checkpoint")
+            except Exception:
+                pass
+        if cur_args is not None and {'seq_len', 'hidden_size', 'num_layers', 'num_heads'}.issubset(checkpoint.keys()):
+            if checkpoint['seq_len'] != cur_args.seq_len or checkpoint['hidden_size'] != cur_args.hidden_size or checkpoint['num_layers'] != cur_args.num_layers or checkpoint['num_heads'] != cur_args.num_heads:
                 logger.info("当前为预测模式，已自动使用模型保存时的参数")
-                args.seq_len = checkpoint['seq_len']
-                args.hidden_size = checkpoint['hidden_size']
-                args.num_layers = checkpoint['num_layers']
-                args.num_heads = checkpoint['num_heads']
+                # modify cur_args in-place if possible
+                try:
+                    cur_args.seq_len = checkpoint['seq_len']
+                    cur_args.hidden_size = checkpoint['hidden_size']
+                    cur_args.num_layers = checkpoint['num_layers']
+                    cur_args.num_heads = checkpoint['num_heads']
+                except Exception:
+                    pass
         model = build_model()
         model.load_state_dict(checkpoint['model_state_dict'])
         logger.info("已加载{}模型".format(sub_name))
@@ -393,24 +556,26 @@ def predict_ball_model(name, dataset, num_classes, sub_name="红球", window_siz
 
 def run_predict(window_size, hidden_size=128, num_layers=8, num_heads=16, f_data=0, model="Transformer", args=None, test_mode=0):
     global pred_key_d
-    balls = ['red', 'blue'] if mini_args.name not in ["pls", "kl8"] else ['red']
+    # prefer explicit args, otherwise fall back to global mini_args for backward compatibility
+    cur_args = args if args is not None else mini_args
+    balls = ['red', 'blue'] if cur_args.name not in ["pls", "kl8"] else ['red']
     for sub_name_eng in balls:
         sub_name = "红球" if sub_name_eng == "red" else "蓝球"
-        slot_count = model_args[mini_args.name]["model_args"]["{}_sequence_len".format(sub_name_eng)]
-        num_classes = model_args[mini_args.name]["model_args"]["{}_n_class".format(sub_name_eng)]
+        slot_count = model_args[cur_args.name]["model_args"]["{}_sequence_len".format(sub_name_eng)]
+        num_classes = model_args[cur_args.name]["model_args"]["{}_n_class".format(sub_name_eng)]
         if window_size != 0:
-            model_args[mini_args.name]["model_args"]["seq_len"] = window_size
-        syspath = model_path + model_args[mini_args.name]["pathname"]['name'] + str(mini_args.seq_len) + model_args[mini_args.name]["subpath"][sub_name_eng]
+            model_args[cur_args.name]["model_args"]["seq_len"] = window_size
+        syspath = model_path + model_args[cur_args.name]["pathname"]['name'] + str(cur_args.seq_len) + model_args[cur_args.name]["subpath"][sub_name_eng]
         if os.path.exists("{}{}_ball_model_pytorch_{}.ckpt".format(syspath, sub_name_eng, model)):
-            current_number = get_current_number(mini_args.name)
-            logger.info("【{}】最新期号: {}".format(name_path[mini_args.name]["name"], current_number))
-            logger.info("正在创建【{}】数据集...".format(name_path[mini_args.name]["name"]))
-            data = create_train_data(mini_args.name, model_args[mini_args.name]["model_args"]["seq_len"], 1, sub_name_eng, mini_args.cq, f_data=f_data, model=model, test_flag=2)
+            current_number = get_current_number(cur_args.name)
+            logger.info("【{}】最新期号: {}".format(name_path[cur_args.name]["name"], current_number))
+            logger.info("正在创建【{}】数据集...".format(name_path[cur_args.name]["name"]))
+            data = create_train_data(cur_args.name, model_args[cur_args.name]["model_args"]["seq_len"], 1, sub_name_eng, cur_args.cq, f_data=f_data, model=model, test_flag=2)
 
             input_dim = slot_count + modeling.extra_classes
             output_dim = num_classes
 
-            y_pred, name_list, y_target = predict_ball_model(name=mini_args.name,
+            y_pred, name_list, y_target = predict_ball_model(name=cur_args.name,
                                                              dataset=data,
                                                              num_classes=output_dim,
                                                              sub_name=sub_name,
@@ -421,7 +586,7 @@ def run_predict(window_size, hidden_size=128, num_layers=8, num_heads=16, f_data
                                                              input_size=input_dim,
                                                              output_size=output_dim,
                                                              model_name=model,
-                                                             args=args,
+                                                             args=cur_args,
                                                              embedding_dim=50)
 
             if y_pred is None:
@@ -476,13 +641,15 @@ def get_year():
 def try_error(name, predict_features, seq_len):
     """ 处理异常
     """
+    # try_error may be called in contexts where args are injected; use global mini_args as fallback
+    cur_args = mini_args
     if len(predict_features) != seq_len:
         logger.warning("期号出现跳期，期号不连续！开始查找最近上一期期号！本期预测时间较久！")
         last_current_year = (get_year() - 1) * 1000
         max_times = 160
         while len(predict_features) != seq_len:
             # predict_features = spider(name, last_current_year + max_times, get_current_number(name), "predict")[[x[0] for x in ball_name]]
-            if mini_args.cq == 0:
+            if cur_args.cq == 0:
                 predict_features = spider(name, last_current_year + max_times, get_current_number(name), "predict", seq_len)
             else:
                 predict_features = spider_cq(name, last_current_year + max_times, get_current_number(name), "predict", seq_len)

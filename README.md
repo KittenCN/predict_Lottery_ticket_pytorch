@@ -48,6 +48,8 @@ pip install -r requirements.txt
 python scripts/get_data.py --name kl8 --cq 0
 ```
 
+网络抓取说明：爬虫默认只允许配置中的受信任域名，可在 `src/config.py` 中调整 `HTTP_ALLOWLIST`，并可通过 `HTTP_CACHE_DIR` 指定本地缓存目录以在网络不可用时回退。
+
 ### 3. 训练模型
 ```bash
 python scripts/train_model.py --name kl8 --seq_len 5 --red_epochs 100
@@ -58,7 +60,37 @@ python scripts/train_model.py --name kl8 --seq_len 5 --red_epochs 100
 python scripts/predict.py --name kl8 --seq_len 5 --model Transformer
 ```
 
-## 📊 项目进度
+## � Smoke test 与 Pipeline 快速示例
+
+建议在改动训练/数据逻辑时先运行 smoke test 验证前向/反向与 checkpoint 保存加载链路：
+
+```bash
+python -m pytest tests/test_smoke_train.py -q
+```
+
+新增的集成 smoke 测试（更完整的前向/反向 + checkpoint roundtrip）：
+
+```bash
+pytest tests/test_smoke_integration.py -q
+```
+
+新增了一个轻量 Pipeline 帮助类 `src.pipeline.LotteryPipeline`，用于短期内减少对全局可变状态的依赖（非破坏性）：
+
+示例：
+
+```python
+from src.pipeline import LotteryPipeline
+pipe = LotteryPipeline()
+pipe.set_args(args)  # 可选
+ds = pipe.create_dataset('kl8', windows=5, dataset=1, ball_type='red')
+# 训练、保存
+pipe.save_checkpoint('path.ckpt', model, optimizer=opt, epoch=0)
+# 加载时会自动恢复 extra_classes
+ck = pipe.load_checkpoint('path.ckpt')
+```
+
+
+## �📊 项目进度
 
 ✅ **已完成功能：**
 - 按论文复现并优化了 Transformer/LSTM 模型
