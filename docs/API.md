@@ -1,0 +1,43 @@
+# API 文档
+
+## 模块说明
+
+### src.config
+配置文件模块，包含所有彩票类型的配置参数。
+
+### src.modeling  
+模型定义模块，包含Transformer和LSTM模型的实现。
+
+### src.common
+通用功能模块，包含数据处理、模型训练、预测等功能。
+
+## 使用方法
+
+### 数据获取
+```bash
+python scripts/get_data.py --name kl8 --cq 0
+```
+
+### 模型训练
+```bash
+python scripts/train_model.py --name kl8 --seq_len 5 --red_epochs 100
+```
+
+### 模型预测
+```bash
+python scripts/predict.py --name kl8 --seq_len 5 --model Transformer
+```
+
+## 配置参数说明
+
+| 参数 | 描述 | 默认值 |
+|------|------|--------|
+| name | 彩票类型 (kl8/ssq/dlt/pls/qxc) | kl8 |
+| seq_len | 训练窗口大小 | 5 |  
+| red_epochs | 红球训练轮数 | 100 |
+| blue_epochs | 蓝球训练轮数 | 1 |
+| batch_size | 批次大小 | 32 |
+| hidden_size | 隐藏层大小 | 2560 |
+| num_layers | 网络层数 | 6 |
+| num_heads | 注意力头数 | 8 |
+| model | 模型类型 (Transformer/LSTM) | Transformer |

@@ -9,14 +9,18 @@ import warnings
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import modeling
 import sys
 import glob
 import pandas as pd
 from torch.utils.data import DataLoader
-from common import create_train_data, get_data_run
 from tqdm import tqdm
-from config import *
+
+# 添加项目根目录到 Python 路径
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
+from src import modeling
+from src.common import create_train_data, get_data_run
+from src.config import *
 from loguru import logger
 from datetime import datetime as dt
 from prefetch_generator import BackgroundGenerator
@@ -532,6 +536,89 @@ def run(name, seq_len):
     logger.info("训练总耗时: {:.4f}".format(time.time() - total_start_time))
 
 if __name__ == '__main__':
+    list_seq_len = args.seq_len.split(",")
+    if not args.name:
+        raise Exception("玩法名称不能为空！")
+    elif not args.seq_len:
+        raise Exception("窗口大小不能为空！")
+    else:
+        if args.download_data == 1 and args.predict_pro == 0 and int(time.strftime("%H", time.localtime())) < 20:
+            logger.info("正在创建【{}】数据集...".format(name_path[args.name]["name"]))
+            get_data_run(name=args.name, cq=args.cq)
+        model_args[args.name]["model_args"]["red_epochs"] = int(args.red_epochs)
+        model_args[args.name]["model_args"]["blue_epochs"] = int(args.blue_epochs)
+        model_args[args.name]["model_args"]["batch_size"] = int(args.batch_size)
+        if args.predict_pro == 1:
+            list_seq_len = []
+            path = model_path + model_args[args.name]["pathname"]['name']
+            dbtype_list = os.listdir(path)
+            for dbtype in dbtype_list:
+                try:
+                    list_seq_len.append(int(dbtype))
+                except:
+                    pass
+            if len(list_seq_len) == 0:
+                raise Exception("没有找到训练模型！")
+            list_seq_len.sort(reverse=True)   
+            logger.info(path)
+            logger.info("seq_len: {}".format(list_seq_len))
+            model_args[args.name]["model_args"]["red_epochs"] = 1
+            model_args[args.name]["model_args"]["blue_epochs"] = 1
+            model_args[args.name]["model_args"]["batch_size"] = 1
+        else:
+            if args.epochs > 1:
+                model_args[args.name]["model_args"]["red_epochs"] = 1
+                model_args[args.name]["model_args"]["blue_epochs"] = 1
+            elif args.epochs <= 0:
+                raise Exception("训练轮数不能小于1！")
+            if list_seq_len[0] == "-1":
+                list_seq_len = []
+                path = model_path + model_args[args.name]["pathname"]['name']
+                dbtype_list = os.listdir(path)
+                for dbtype in dbtype_list:
+                    try:
+                        list_seq_len.append(int(dbtype))
+                    except:
+                        pass
+                if len(list_seq_len) == 0:
+                    raise Exception("没有找到训练模型！")
+                list_seq_len.sort(reverse=True)   
+                logger.info(path)
+                logger.info("seq_len: {}".format(list_seq_len))
+        run(args.name, list_seq_len)
+
+def main():
+    """主函数 - 供setup.py调用"""
+    global args
+    # 重新解析参数以支持控制台命令
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--name', default="kl8", type=str, help="选择训练数据")
+    parser.add_argument('--seq_len', default='5', type=str, help="训练窗口大小,如有多个，用'，'隔开")
+    parser.add_argument('--red_epochs', default=100, type=int, help="红球训练轮数")
+    parser.add_argument('--blue_epochs', default=1, type=int, help="蓝球训练轮数")
+    parser.add_argument('--batch_size', default=32, type=int, help="集合数量")
+    parser.add_argument('--predict_pro', default=0, type=int, help="更新batch_size")
+    parser.add_argument('--epochs', default=1, type=int, help="训练轮数(红蓝球交叉训练)")
+    parser.add_argument('--cq', default=0, type=int, help="是否使用出球顺序，0：不使用（即按从小到大排序），1：使用")
+    parser.add_argument('--download_data', default=1, type=int, help="是否下载数据")
+    parser.add_argument('--hidden_size', default=2560, type=int, help="hidden_size")
+    parser.add_argument('--num_layers', default=6, type=int, help="num_layers")
+    parser.add_argument('--num_heads', default=8, type=int, help="num_heads")
+    parser.add_argument('--tensorboard', default=0, type=int, help="tensorboard switch")
+    parser.add_argument('--num_workers', default=0, type=int, help="num_workers switch")
+    parser.add_argument('--top_k', default=10, type=int, help="top_k switch")
+    parser.add_argument('--model', default='Transformer', type=str, help="model name")
+    parser.add_argument('--lr', default=0.01, type=float, help="learning rate")
+    parser.add_argument('--plus_mode', default=0, type=int, help="plus mode")
+    parser.add_argument('--ext_times', default=1000, type=int, help="ext_times")
+    parser.add_argument('--init', default=0, type=int, help="init")
+    parser.add_argument('--train_mode', default=0, type=int, help="0: mormal, 1: new trainning, 2: best test model, 3: best loss model")
+    parser.add_argument('--split_time', default=2021351, type=int, help="tranning data split time, greater than 0, will saving best test model")
+    parser.add_argument('--save_best_loss', default=0, type=int, help="save best loss model")
+    parser.add_argument('--cpu', default=0, type=int, help="using cpu, 1: cpu, 0: checking gpu")
+    args = parser.parse_args()
+    
+    # 执行原来的主逻辑
     list_seq_len = args.seq_len.split(",")
     if not args.name:
         raise Exception("玩法名称不能为空！")

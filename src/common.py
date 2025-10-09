@@ -10,12 +10,12 @@ import torch
 import torch.nn.functional as F
 import datetime
 import numpy as np
-import modeling
+from src import modeling
 from torch.utils.data import DataLoader
 from bs4 import BeautifulSoup
 from loguru import logger
 from torch import nn
-from config import *
+from src.config import *
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
