@@ -67,8 +67,7 @@ def binary_decode_array(binary_encoded_data, threshold=0.25, top_k=20):
     Returns:
     - A list of lists, where each inner list contains the numbers of the top_k selected classes based on the threshold.
     """
-    # sigmoid = torch.sigmoid(binary_encoded_data)  # Convert raw scores to probabilities
-    sigmoid = binary_encoded_data
+    sigmoid = torch.sigmoid(binary_encoded_data)  # Convert raw scores to probabilities
     if sigmoid.ndim == 1:
         seq_len, num_classes = 1, sigmoid.shape[0]
     elif sigmoid.ndim == 2:

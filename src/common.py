@@ -318,19 +318,14 @@ def init():
     pred_key_d = {}
     mini_args = {}
 
-def predict_ball_model(name, dataset, sequence_len, sub_name="红球", window_size=1, hidden_size=128, num_layers=8, num_heads=16, input_size=20, output_size=20, model_name="Transformer", args=None, device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),embedding_dim=50):
-    """ 模型训练
-    :param name: 玩法
-    :param x_data: 训练样本
-    :param y_data: 训练标签
-    :return:
-    """
+def predict_ball_model(name, dataset, num_classes, sub_name="红球", window_size=1, hidden_size=128, num_layers=8, num_heads=16, input_size=20, output_size=20, model_name="Transformer", args=None, device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu"), embedding_dim=50):
+    """ 预测指定球种的下一期结果 """
     global last_save_time
     sub_name_eng = "red" if sub_name == "红球" else "blue"
     ball_model_name = red_ball_model_name if sub_name == "红球" else blue_ball_model_name
     m_args = model_args[name]
     ball_index = 0 if sub_name == "红球" else 1
-    name_list = [(ball_name[ball_index], i + 1) for i in range(sequence_len)]
+    name_list = [(ball_name[ball_index], i + 1) for i in range(num_classes)]
     syspath = model_path + model_args[mini_args.name]["pathname"]['name'] + str(window_size) + model_args[mini_args.name]["subpath"][sub_name_eng]
     if not os.path.exists(syspath):
         os.makedirs(syspath)
@@ -339,155 +334,135 @@ def predict_ball_model(name, dataset, sequence_len, sub_name="红球", window_si
     dataset = [dataset[0]]
     dataloader = DataLoader(dataset, batch_size=1, shuffle=False)
 
-    # 定义模型和优化器
     if model_name == "Transformer":
         _model = modeling.Transformer_Model
     elif model_name == "LSTM":
         _model = modeling.LSTM_Model
-    # model = _model(input_size=input_size, output_size=output_size, hidden_size=hidden_size, num_layers=num_layers, num_heads=num_heads, dropout=0.5, num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)], embedding_dim=embedding_dim, seq_len=window_size).to(device)
-    if os.path.exists("{}{}_ball_model_pytorch_{}.ckpt".format(syspath, sub_name_eng, model_name)):
-        # model.load_state_dict(torch.load("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)))
-        checkpoint = torch.load("{}{}_ball_model_pytorch_{}.ckpt".format(syspath, sub_name_eng, model_name))
-        if 'seq_len' in checkpoint and 'hidden_size' in checkpoint and 'num_layers' in checkpoint and 'num_heads' in checkpoint:
+    else:
+        raise ValueError("暂不支持的模型类型: {}".format(model_name))
+
+    checkpoint_path = f"{syspath}{sub_name_eng}_ball_model_pytorch_{model_name}.ckpt"
+    input_dim = input_size
+
+    def build_model():
+        if model_name == "Transformer":
+            return _model(input_size=input_dim,
+                          output_size=output_size,
+                          hidden_size=args.hidden_size,
+                          num_layers=args.num_layers,
+                          num_heads=args.num_heads,
+                          dropout=0.5,
+                          num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)],
+                          embedding_dim=embedding_dim,
+                          seq_len=int(args.seq_len)).to(device)
+        return _model(input_size=input_dim,
+                      output_size=output_size,
+                      hidden_size=args.hidden_size,
+                      num_layers=args.num_layers,
+                      num_heads=args.num_heads,
+                      dropout=0.5,
+                      num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)],
+                      embedding_dim=embedding_dim,
+                      seq_len=int(args.seq_len)).to(device)
+
+    if os.path.exists(checkpoint_path):
+        checkpoint = torch.load(checkpoint_path, map_location=device)
+        if args is not None and {'seq_len', 'hidden_size', 'num_layers', 'num_heads'}.issubset(checkpoint.keys()):
             if checkpoint['seq_len'] != args.seq_len or checkpoint['hidden_size'] != args.hidden_size or checkpoint['num_layers'] != args.num_layers or checkpoint['num_heads'] != args.num_heads:
-                logger.info("当前为预测模式，将自动调整训练参数！")
+                logger.info("当前为预测模式，已自动使用模型保存时的参数")
                 args.seq_len = checkpoint['seq_len']
                 args.hidden_size = checkpoint['hidden_size']
                 args.num_layers = checkpoint['num_layers']
                 args.num_heads = checkpoint['num_heads']
-                # model = _model(input_size=input_size, \
-                #                 output_size=output_size, \
-                #                 hidden_size=hidden_size, \
-                #                 num_layers=num_layers, \
-                #                 num_heads=num_heads, \
-                #                 dropout=0.5, \
-                #                 num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)], \
-                #                 embedding_dim=embedding_dim, \
-                #                 seq_len=window_size).to(device)
-                if args.model == "Transformer":
-                    model = _model(input_size=int(args.seq_len)*int(args.hidden_size), 
-                                output_size=output_size, 
-                                hidden_size=int(args.hidden_size), 
-                                num_layers=int(args.num_layers), 
-                                num_heads=int(args.num_heads), 
-                                dropout=0.5).to(device)
-                elif args.model == "LSTM":
-                    model = _model(input_size=int(args.seq_len)*int(args.hidden_size), 
-                                output_size=output_size, 
-                                hidden_size=int(args.hidden_size), 
-                                num_layers=int(args.num_layers), 
-                                num_heads=int(args.num_heads), 
-                                dropout=0.5, 
-                                num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)], 
-                                embedding_dim=embedding_dim, 
-                                seq_len=int(args.seq_len)).to(device)
-        else:
-            logger.info("模型不是最新版本，建议重新训练！")
+        model = build_model()
         model.load_state_dict(checkpoint['model_state_dict'])
-        logger.info("已加载{}模型！".format(sub_name))
+        logger.info("已加载{}模型".format(sub_name))
     else:
-        if args.model == "Transformer":
-            model = _model(input_size=input_size, 
-                        output_size=output_size, 
-                        hidden_size=args.hidden_size, 
-                        num_layers=args.num_layers, 
-                        num_heads=args.num_heads, 
-                        dropout=0.5).to(device)
-        elif args.model == "LSTM":
-            model = _model(input_size=input_size, 
-                        output_size=output_size, 
-                        hidden_size=args.hidden_size, 
-                        num_layers=args.num_layers, 
-                        num_heads=args.num_heads, 
-                        dropout=0.5, 
-                        num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)], 
-                        embedding_dim=embedding_dim, 
-                        seq_len=int(args.seq_len)).to(device)
+        model = build_model()
+
     model.eval()
+    y_pred_cpu = None
+    y_target_cpu = None
     for batch in dataloader:
         x, y = batch
         x = x.float().to(device)
-        y = y.float().to(device)
         y_pred = model(x)
-    return y_pred, name_list, y
+        y_pred_cpu = y_pred.detach().cpu()
+        y_target_cpu = y.detach().cpu()
+    return y_pred_cpu, name_list, y_target_cpu
 
-def run_predict(window_size, sequence_len, hidden_size=128, num_layers=8, num_heads=16, input_size=20, output_size=20, f_data=0, model="Transformer", args=None, test_mode=0):
+def run_predict(window_size, hidden_size=128, num_layers=8, num_heads=16, f_data=0, model="Transformer", args=None, test_mode=0):
     global pred_key_d
     balls = ['red', 'blue'] if mini_args.name not in ["pls", "kl8"] else ['red']
     for sub_name_eng in balls:
         sub_name = "红球" if sub_name_eng == "red" else "蓝球"
+        slot_count = model_args[mini_args.name]["model_args"]["{}_sequence_len".format(sub_name_eng)]
+        num_classes = model_args[mini_args.name]["model_args"]["{}_n_class".format(sub_name_eng)]
         if window_size != 0:
             model_args[mini_args.name]["model_args"]["seq_len"] = window_size
         syspath = model_path + model_args[mini_args.name]["pathname"]['name'] + str(mini_args.seq_len) + model_args[mini_args.name]["subpath"][sub_name_eng]
-        # redpath = model_path + model_args[mini_args.name]["pathname"]['name'] + str(model_args[mini_args.name]["model_args"]["seq_len"]) + model_args[mini_args.name]["subpath"]['red']
-        # bluepath = model_path + model_args[mini_args.name]["pathname"]['name'] + str(model_args[mini_args.name]["model_args"]["seq_len"]) + model_args[mini_args.name]["subpath"]['blue']
-        # model = modeling.TransformerModel(input_size=20, output_size=20).to(device)
         if os.path.exists("{}{}_ball_model_pytorch_{}.ckpt".format(syspath, sub_name_eng, model)):
-            # model.load_state_dict(torch.load("{}{}_ball_model_pytorch.ckpt".format(syspath, sub_name_eng)))
-            # logger.info("已加载{}模型！窗口大小:{}".format(sub_name, model_args[mini_args.name]["model_args"]["seq_len"]))
             current_number = get_current_number(mini_args.name)
-            logger.info("【{}】最近一期:{}".format(name_path[mini_args.name]["name"], current_number))
+            logger.info("【{}】最新期号: {}".format(name_path[mini_args.name]["name"], current_number))
             logger.info("正在创建【{}】数据集...".format(name_path[mini_args.name]["name"]))
-            data = create_train_data(mini_args.name, model_args[mini_args.name]["model_args"]["seq_len"], 1, sub_name_eng, mini_args.cq,f_data=f_data, model=model, test_flag=2)
-            # name, dataset, sequence_len, sub_name="红球", window_size=1, hidden_size=128, num_layers=8, num_heads=16, input_size=20, output_size=20, model_name="Transformer", args=None, device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),embedding_dim=50
-            y_pred, name_list, y_target = predict_ball_model(name=mini_args.name, \
-                                                                dataset=data, \
-                                                                sequence_len=sequence_len, \
-                                                                sub_name=sub_name, \
-                                                                window_size=window_size, \
-                                                                hidden_size=hidden_size, \
-                                                                num_layers=num_layers, \
-                                                                num_heads=num_heads, \
-                                                                input_size=input_size, \
-                                                                output_size=output_size, \
-                                                                model_name=model, \
-                                                                args=args, \
-                                                                embedding_dim=50)
+            data = create_train_data(mini_args.name, model_args[mini_args.name]["model_args"]["seq_len"], 1, sub_name_eng, mini_args.cq, f_data=f_data, model=model, test_flag=2)
+
+            input_dim = slot_count + modeling.extra_classes
+            output_dim = num_classes
+
+            y_pred, name_list, y_target = predict_ball_model(name=mini_args.name,
+                                                             dataset=data,
+                                                             num_classes=output_dim,
+                                                             sub_name=sub_name,
+                                                             window_size=window_size,
+                                                             hidden_size=hidden_size,
+                                                             num_layers=num_layers,
+                                                             num_heads=num_heads,
+                                                             input_size=input_dim,
+                                                             output_size=output_dim,
+                                                             model_name=model,
+                                                             args=args,
+                                                             embedding_dim=50)
+
+            if y_pred is None:
+                logger.warning("未获得{}的预测结果".format(sub_name))
+                continue
+
+            probabilities = torch.sigmoid(y_pred.squeeze(0))
+            decoded = modeling.binary_decode_array(probabilities, threshold=0.25, top_k=output_dim)
+            predicted_candidates = decoded[0] if len(decoded) > 0 else []
+            unique_candidates = list(dict.fromkeys(predicted_candidates))
+            top_predictions = unique_candidates[:slot_count]
+
             if test_mode == 0 or f_data == 0:
-                logger.info("预测{}结果为: \n".format(sub_name))
+                logger.info("{}候选号码: {}".format(sub_name, predicted_candidates))
             else:
-                logger.info("测试{}结果为: ".format(sub_name))
-            correct_nums = 0
-            total_nums = 0
+                logger.info("{}候选号码: {}".format(sub_name, top_predictions))
+
             result_strings = []
             result_strings.append("------------Predict Datetime: {}------------".format(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
-            if model == "Transformer":
-                y_pred_list = modeling.binary_decode_array(y_pred, threshold=0.25, top_k=model_args[mini_args.name]["model_args"]["{}_n_class".format(sub_name_eng)])
-                for row in y_pred_list:
-                    row_limit = row[0:model_args[mini_args.name]["model_args"]["{}_n_class".format(sub_name_eng)]]
-                    if test_mode == 0 or f_data == 0:
-                        logger.info("超过阈值的数据: {}".format(row))
-                        result_strings.append("超过阈值的数据: {}".format(row))
-                        logger.info("前K位超过阈值的数据: {}".format(row_limit))
-                        result_strings.append("前K位超过阈值的数据: {}".format(row_limit))
-                        logger.info("排序后前K位超过阈值的数据: {}".format(sorted(row_limit)))
-                        result_strings.append("排序后前K位超过阈值的数据: {}".format(sorted(row_limit)))
-                    else:
-                        row_limit = list(dict.fromkeys(row_limit))
-                        row_limit_set = set(row_limit)
-                        y_target_set = set((y_target+1).view(y_target.size(0), -1).tolist()[0])
-                        total_nums += len(list(dict.fromkeys(y_target.tolist()[0][0])))
-                        correct_nums += len(row_limit_set & y_target_set)
-            elif model == "LSTM":
-                softmax = nn.Softmax(dim=1)
-                y_pred_list = modeling.decode_one_hot(softmax(y_pred), sort_by_max_value=True, num_classes=model_args[mini_args.name]["model_args"]["{}_n_class".format(sub_name_eng)])
-                if test_mode == 0 or f_data == 0:
-                    logger.info("超过阈值的数据: {}".format(list(dict.fromkeys(y_pred_list))))
-                    result_strings.append("超过阈值的数据: {}".format(list(dict.fromkeys(y_pred_list))))
-                    logger.info("排序后超过阈值的数据: {}".format(sorted(list(dict.fromkeys(y_pred_list)))))
-                    result_strings.append("排序后超过阈值的数据: {}".format(sorted(list(dict.fromkeys(y_pred_list)))))
-                else:
-                    y_target_set = set((y_target+1).view(y_target.size(0), -1).tolist()[0])
-                    y_pred_set = set(list(dict.fromkeys(y_pred_list)))
-                    total_nums += len(list(dict.fromkeys(y_target.tolist()[0][0])))
-                    correct_nums += len(y_pred_set & y_target_set)
+            result_strings.append("候选号码(阈值0.25): {}".format(predicted_candidates))
+            result_strings.append("前{}位候选号码: {}".format(slot_count, top_predictions))
+            result_strings.append("前{}位候选排序: {}".format(slot_count, sorted(top_predictions)))
+
+            correct_nums = 0
+            total_nums = 0
+            if y_target is not None:
+                target_array = y_target[:, :, :slot_count].reshape(-1).tolist()
+                target_numbers = [int(value) for value in target_array if 1 <= int(value) <= num_classes]
+                target_unique = list(dict.fromkeys(target_numbers))
+                y_target_set = set(target_unique)
+                total_nums += len(target_unique)
+                correct_nums += len(set(top_predictions) & y_target_set)
+
             if test_mode != 0 and f_data > 0:
-                logger.info("预测{}结果为: {:.2f}%".format(sub_name, correct_nums / (total_nums if total_nums > 0 else 1) * 100))
-                result_strings.append("预测{}结果为: {:.2f}%".format(sub_name, correct_nums / (total_nums if total_nums > 0 else 1) * 100))
+                accuracy = correct_nums / (total_nums if total_nums > 0 else 1)
+                logger.info("预测{}准确率: {:.2f}%".format(sub_name, accuracy * 100))
+                result_strings.append("预测{}准确率: {:.2f}%".format(sub_name, accuracy * 100))
             result_strings.append("------------------------------------------------")
             write_strings_to_file(result_path, result_strings)
         else:
-            logger.warning("抱歉，没有找到{}模型！".format(sub_name))
+            logger.warning("抱歉，没有找到{}模型".format(sub_name))
             exit(0)
 
 def get_year():

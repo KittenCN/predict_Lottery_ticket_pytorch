@@ -63,23 +63,16 @@ if __name__ == '__main__':
             current_number = get_current_number(args.name)
             # run_predict(int(size), model_args[args.name]["model_args"]['red_sequence_len'], hidden_size=args.hidden_size, num_layers=args.num_layers, num_heads=args.num_heads, input_size=model_args[args.name]["model_args"]["red_n_class"]*int(size), output_size=model_args[args.name]["model_args"]["red_n_class"], f_data=args.f_data, model=args.model)
             # window_size, sequence_len, hidden_size=128, num_layers=8, num_heads=16, input_size=20, output_size=20, f_data=0, model="Transformer", args=None, test_mode=0
-            if args.model == "Transformer":
-                _input_size=(model_args[args.name]["model_args"]["{}_sequence_len".format("red")]+modeling.extra_classes)*model_args[args.name]["model_args"]["seq_len"]
-                _output_size=model_args[args.name]["model_args"]["{}_sequence_len".format("red")]
-            elif args.model == "LSTM":
-                _input_size=model_args[args.name]["model_args"]["{}_sequence_len".format("red")]
-                _output_size=(model_args[args.name]["model_args"]["{}_sequence_len".format("red")]+modeling.extra_classes)*model_args[args.name]["model_args"]["{}_n_class".format("red")]
-            run_predict(window_size=int(size), \
-                        sequence_len=model_args[args.name]["model_args"]['red_sequence_len']+modeling.extra_classes, \
-                        hidden_size=args.hidden_size, \
-                        num_layers=args.num_layers, \
-                        num_heads=args.num_heads, \
-                        input_size=_input_size, \
-                        output_size=_output_size, \
-                        f_data=args.f_data, \
-                        model=args.model, \
-                        args=args, \
-                        test_mode=args.test_mode)
+            run_predict(
+                window_size=int(size),
+                hidden_size=args.hidden_size,
+                num_layers=args.num_layers,
+                num_heads=args.num_heads,
+                f_data=args.f_data,
+                model=args.model,
+                args=args,
+                test_mode=args.test_mode,
+            )
 
 def main():
     """主函数 - 供setup.py调用"""
@@ -131,20 +124,13 @@ def main():
             logger.info("seq_len: {}".format(list_seq_len))
         for size in list_seq_len:
             current_number = get_current_number(args.name)
-            if args.model == "Transformer":
-                _input_size=(model_args[args.name]["model_args"]["{}_sequence_len".format("red")]+modeling.extra_classes)*model_args[args.name]["model_args"]["seq_len"]
-                _output_size=model_args[args.name]["model_args"]["{}_sequence_len".format("red")]
-            elif args.model == "LSTM":
-                _input_size=model_args[args.name]["model_args"]["{}_sequence_len".format("red")]
-                _output_size=(model_args[args.name]["model_args"]["{}_sequence_len".format("red")]+modeling.extra_classes)*model_args[args.name]["model_args"]["{}_n_class".format("red")]
-            run_predict(window_size=int(size), \
-                        sequence_len=model_args[args.name]["model_args"]['red_sequence_len']+modeling.extra_classes, \
-                        hidden_size=args.hidden_size, \
-                        num_layers=args.num_layers, \
-                        num_heads=args.num_heads, \
-                        input_size=_input_size, \
-                        output_size=_output_size, \
-                        f_data=args.f_data, \
-                        model=args.model, \
-                        args=args, \
-                        test_mode=args.test_mode)
+            run_predict(
+                window_size=int(size),
+                hidden_size=args.hidden_size,
+                num_layers=args.num_layers,
+                num_heads=args.num_heads,
+                f_data=args.f_data,
+                model=args.model,
+                args=args,
+                test_mode=args.test_mode,
+            )

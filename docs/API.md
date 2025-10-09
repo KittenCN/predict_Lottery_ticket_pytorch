@@ -23,10 +23,16 @@ python scripts/get_data.py --name kl8 --cq 0
 python scripts/train_model.py --name kl8 --seq_len 5 --red_epochs 100
 ```
 
+- 训练脚本会在内部将标签转换为**多热向量**，并使用 `BCEWithLogitsLoss`（或 FocalLoss）配合 Sigmoid 概率进行多标签优化，无需手动调整损失函数；
+- `tests` 阶段默认复用与训练一致的多热语义，并通过 Top-K 命中率评估模型效果。
+
 ### 模型预测
 ```bash
 python scripts/predict.py --name kl8 --seq_len 5 --model Transformer
 ```
+
+- 预测脚本会先根据已保存的模型 ckpt、`modeling.extra_classes` 等元数据自动推导输入/输出维度；
+- 输出结果基于 Sigmoid 概率，默认使用阈值 0.25 生成候选号码列表，并统计 Top-K 命中情况。
 
 ## 配置参数说明
 

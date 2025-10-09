@@ -87,6 +87,19 @@ class DataLoaderX(DataLoader):
     def __iter__(self):
         return BackgroundGenerator(super().__iter__())
 
+
+def to_multi_hot(y_values: torch.Tensor, num_classes: int, device: torch.device) -> torch.Tensor:
+    """将号码序列转换为多热向量，号码以 1 开始编号。"""
+    if num_classes <= 0:
+        return torch.zeros((y_values.size(0), 0), device=device)
+    y_indices = y_values.long() - 1  # 转换为 0 起始索引
+    valid_mask = (y_indices >= 0) & (y_indices < num_classes)
+    multi_hot = torch.zeros((y_values.size(0), num_classes), device=device)
+    if valid_mask.any():
+        rows, cols = torch.nonzero(valid_mask, as_tuple=True)
+        target_cols = y_indices[rows, cols]
+        multi_hot[rows, target_cols] = 1.0
+    return multi_hot
 def save_model(model, optimizer, lr_scheduler, scaler, epoch, syspath, ball_model_name, other="", no_update_times=0):
     model_state_dict = model.state_dict()
     optimizer_state_dict = optimizer.state_dict()
@@ -131,25 +144,27 @@ def load_model(m_args, syspath, sub_name_eng, model, optimizer, lr_scheduler, sc
                     args.hidden_size = checkpoint['hidden_size']
                     args.num_layers = checkpoint['num_layers']
                     args.num_heads = checkpoint['num_heads']
+                    input_dim = m_args["model_args"]["{}_sequence_len".format(sub_name_eng)] + modeling.extra_classes
+                    output_dim = m_args["model_args"]["{}_n_class".format(sub_name_eng)]
                     if args.model == "Transformer":
-                        model = _model(input_size=(m_args["model_args"]["{}_sequence_len".format(sub_name_eng)]+modeling.extra_classes), 
-                                       output_size=m_args["model_args"]["{}_sequence_len".format(sub_name_eng)], 
-                                       hidden_size=args.hidden_size, 
-                                       num_layers=args.num_layers, 
-                                       num_heads=args.num_heads, 
-                                       dropout=0.5, 
-                                       num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)], 
-                                       embedding_dim=50, 
+                        model = _model(input_size=input_dim,
+                                       output_size=output_dim,
+                                       hidden_size=args.hidden_size,
+                                       num_layers=args.num_layers,
+                                       num_heads=args.num_heads,
+                                       dropout=0.5,
+                                       num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)],
+                                       embedding_dim=50,
                                        seq_len=int(args.seq_len)).to(device)
                     elif args.model == "LSTM":
-                        model = _model(input_size=m_args["model_args"]["{}_sequence_len".format(sub_name_eng)], 
-                                       output_size=(m_args["model_args"]["{}_sequence_len".format(sub_name_eng)]+modeling.extra_classes)*m_args["model_args"]["{}_n_class".format(sub_name_eng)], 
-                                       hidden_size=args.hidden_size, 
-                                       num_layers=args.num_layers, 
-                                       num_heads=args.num_heads, 
-                                       dropout=0.5, 
-                                       num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)], 
-                                       embedding_dim=50, 
+                        model = _model(input_size=input_dim,
+                                       output_size=output_dim,
+                                       hidden_size=args.hidden_size,
+                                       num_layers=args.num_layers,
+                                       num_heads=args.num_heads,
+                                       dropout=0.5,
+                                       num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)],
+                                       embedding_dim=50,
                                        seq_len=int(args.seq_len)).to(device)
                     optimizer = optim.Adam(model.parameters(), lr=args.lr)
                     lr_scheduler = modeling.CustomSchedule(optimizer=optimizer, 
@@ -205,11 +220,13 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     if not os.path.exists(syspath):
         os.makedirs(syspath)
     logger.info("标签数据维度: {}".format(dataset.data.shape))
-    # 定义模型和优化器
-    # args.hidden_size = m_args["model_args"]["{}_n_class".format(sub_name_eng)]+modeling.extra_classes
+    sequence_len = m_args["model_args"]["{}_sequence_len".format(sub_name_eng)]
+    num_classes = m_args["model_args"]["{}_n_class".format(sub_name_eng)]
+    input_dim = sequence_len + modeling.extra_classes
+
     if args.model == "Transformer":
-        model = _model(input_size=((m_args["model_args"]["{}_sequence_len".format(sub_name_eng)])+modeling.extra_classes), 
-                       output_size=m_args["model_args"]["{}_sequence_len".format(sub_name_eng)], 
+        model = _model(input_size=input_dim, 
+                       output_size=num_classes, 
                        hidden_size=args.hidden_size, 
                        num_layers=args.num_layers, 
                        num_heads=args.num_heads, 
@@ -218,8 +235,8 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
                        embedding_dim=50, 
                        seq_len=int(args.seq_len)).to(device)
     elif args.model == "LSTM":
-        model = _model(input_size=m_args["model_args"]["{}_sequence_len".format(sub_name_eng)]+modeling.extra_classes, 
-                       output_size=(m_args["model_args"]["{}_sequence_len".format(sub_name_eng)]+modeling.extra_classes)*m_args["model_args"]["{}_n_class".format(sub_name_eng)], 
+        model = _model(input_size=input_dim, 
+                       output_size=num_classes, 
                        hidden_size=args.hidden_size, 
                        num_layers=args.num_layers, 
                        num_heads=args.num_heads, 
@@ -227,14 +244,13 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
                        num_embeddings=m_args["model_args"]["{}_n_class".format(sub_name_eng)], 
                        embedding_dim=50, 
                        seq_len=int(args.seq_len)).to(device)
-    if torch.cuda.device_count() >= 1:
         if torch.cuda.device_count() > 1:
             model = nn.DataParallel(model)
         model = model.to(device)
     # criterion = nn.MSELoss()
     # criterion = nn.BCEWithLogitsLoss() # 二分类交叉熵
     # criterion = nn.BCELoss() # 二分类交叉熵
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.BCEWithLogitsLoss()
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
     # lr_scheduler=modeling.CustomSchedule(d_model=args.hidden_size, optimizer=optimizer)
     lr_scheduler = modeling.CustomSchedule(optimizer=optimizer, 
@@ -333,17 +349,16 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
             running_times += 1
             x, y = batch
             x = x.float().to(device)
-            y = y.float().to(device)
+            y_numbers = y.float()[:, :, :sequence_len].squeeze(1).to(device)
+            y_multi_hot = to_multi_hot(y_numbers, num_classes, device)
             optimizer.zero_grad()
             with autocast('cuda'):
-                # shape '[-1, 20, 80]' is invalid for input of size 2560
+                # shape '-1, 20, 80' is invalid for input of size 2560
                 # y_pred = model(x).view(-1, m_args["model_args"]["{}_sequence_len".format(sub_name_eng)], 
                 #                        m_args["model_args"]["{}_n_class".format(sub_name_eng)])
                 y_pred = model(x)
                 # y_pred = y_pred.view(y_pred.shape[0], -1, y_pred.shape[-1])
-                y = y[:,:,:m_args["model_args"]["{}_sequence_len".format(sub_name_eng)]].squeeze(1)
-                t_loss = criterion(y_pred, y)
-            scaler.scale(t_loss).backward()
+                t_loss = criterion(y_pred, y_multi_hot)
             scaler.step(optimizer)
             scaler.update()
             # optimizer.zero_grad()
@@ -373,48 +388,33 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
                         test_times += 1
                         x, y = batch
                         x = x.float().to(device)
-                        y = y.float().to(device)
+                        y_numbers = y.float()[:, :, :sequence_len].squeeze(1).to(device)
+                        y_multi_hot = to_multi_hot(y_numbers, num_classes, device)
                         with autocast('cuda'):
-                            # shape '[-1, 20, 80]' is invalid for input of size 2560
-                            # y_pred = model(x).view(-1, m_args["model_args"]["{}_sequence_len".format(sub_name_eng)], 
-                            #                        m_args["model_args"]["{}_n_class".format(sub_name_eng)])
                             y_pred = model(x)
-                            # y_pred = y_pred.view(y_pred.shape[0], -1, y_pred.shape[-1])
-                            y = y[:,:,:m_args["model_args"]["{}_sequence_len".format(sub_name_eng)]].squeeze(1)
-                            tt_loss = criterion(y_pred, y)
-                        # test_loss += tt_loss.item() * x.size(0)
+                            tt_loss = criterion(y_pred, y_multi_hot)
                         test_loss += tt_loss.item()
-                        # calculate topk loss
-                        if args.name not in ["kl8"]:
-                            args.top_k = m_args["model_args"]["{}_sequence_len".format(sub_name_eng)]
-                        if args.model == "Transformer":
-                            probs, indices = torch.topk(y_pred, args.top_k, dim=1)
-                            for i in range(x.size(0)):
-                                topk_times += args.top_k
-                                target_indices = y[i].nonzero(as_tuple=False).squeeze()
-                                totalK_correct += sum([1 for j in indices[i] if j in target_indices])
-                            probs, indices = torch.topk(y_pred, m_args["model_args"]["{}_sequence_len".format(sub_name_eng)], dim=1)
-                            for i in range(x.size(0)):
-                                top_times += m_args["model_args"]["{}_sequence_len".format(sub_name_eng)]
-                                target_indices = y[i].nonzero(as_tuple=False).squeeze()
-                                total_correct += sum([1 for j in indices[i] if j in target_indices])
-                        elif args.model == "LSTM":
-                            for i in range(x.size(0)):
-                                softmax = nn.Softmax(dim=1)
-                                _ele = modeling.decode_one_hot(softmax(y_pred[i]), sort_by_max_value=True, 
-                                                               num_classes=m_args["model_args"]["{}_n_class".format(sub_name_eng)])
-                                topk_times += args.top_k
-                                top_times += m_args["model_args"]["{}_sequence_len".format(sub_name_eng)]
-                                # target_indices = y[i].nonzero(as_tuple=False).squeeze()
-                                # target_indices = modeling.decode_one_hot(y[i], num_classes=m_args["model_args"]["{}_n_class".format(sub_name_eng)])
-                                target_indices = (y+1).view(y.size(0), -1).tolist()[i]
-                                target_indices_set = set(target_indices)
-                                _eleK_set = set(_ele[0:args.top_k])
-                                _ele_set = set(_ele)
-                                totalK_correct += len(target_indices_set & _eleK_set)
-                                total_correct += len(target_indices_set & _ele_set)
-                                # totalK_correct += sum([1 for j in _ele[0:args.top_k] if j in target_indices])
-                                # total_correct += sum([1 for j in _ele if j in target_indices])
+                        if num_classes > 0:
+                            if args.name not in ["kl8"]:
+                                topk_limit = min(args.top_k, num_classes)
+                            else:
+                                topk_limit = min(sequence_len, num_classes)
+                            slot_limit = min(sequence_len, num_classes)
+                        else:
+                            topk_limit = 0
+                            slot_limit = 0
+                        probs = torch.sigmoid(y_pred)
+                        topk_indices = torch.topk(probs, topk_limit, dim=1).indices if topk_limit > 0 else None
+                        top_indices = torch.topk(probs, slot_limit, dim=1).indices if slot_limit > 0 else None
+                        for i in range(x.size(0)):
+                            target_indices = torch.nonzero(y_multi_hot[i] > 0.5, as_tuple=False).view(-1)
+                            target_set = set(target_indices.tolist())
+                            if topk_limit > 0:
+                                topk_times += topk_limit
+                                totalK_correct += len(target_set & set(topk_indices[i].tolist()))
+                            if slot_limit > 0:
+                                top_times += slot_limit
+                                total_correct += len(target_set & set(top_indices[i].tolist()))
                     # logger.info("Epoch {}/{} Test Loss: {:.2e}".format(epoch+1, model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)], test_loss / len(test_dataset)))
                 topk_loss = 1 - totalK_correct / (topk_times if topk_times > 0 else 1)
                 top_loss = 1 - total_correct / (top_times if top_times > 0 else 1)

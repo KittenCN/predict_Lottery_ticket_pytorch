@@ -21,7 +21,7 @@
 - 评估逻辑在每个保存周期对验证集计算 loss、Top-K 命中率（`scripts/train_model.py` 第362-408行），同时记录最优模型用于后续推理。
 
 ### 1.5 预测与结果输出
-- `scripts/predict.py` 读取最新模型，调用 `run_predict`（`src/common.py` 第415-444行）对目标期号生成概率向量，通过 `binary_decode_array` 等函数解析候选号码，并将命中率统计写入 `results/<日期>.txt`。
+- `scripts/predict.py` 读取最新模型，调用 `src.common.run_predict` 创建预测所需数据集，随后在内部根据 `modeling.extra_classes` 自动推导输入维度，使用 `binary_decode_array` 解析候选号码并将命中率写入 `results/<日期>.txt`。
 - `write_strings_to_file`（`src/common.py` 第525-542行）负责输出预测摘要；`prefetch_generator` 与 `loguru` 提供性能与日志支撑。
 
 ## 2. 当前问题与风险分析
@@ -35,6 +35,7 @@
   - 优点：能利用位置条件分布，便于对不同号码位定义约束。
   - 缺点：改动面大，需重构模型输出维度、数据集标签结构以及评估逻辑。
 - **结论**：优先执行方案 A，确保损失与标签语义一致，再视效果决定是否进一步细化为位置建模。
+- **进展**：`scripts/train_model.py` 已改用多热标签配合 `nn.BCEWithLogitsLoss`，并在训练/评估过程中统一通过 Sigmoid 概率统计 Top-K 准确率；预测阶段亦按相同标签语义输出结果。
 
 ### 2.2 训练与预测阶段特征维度不一致（高）
 - **表现**：`MyDataset` 在构造样本时动态扩展特征维度并通过全局 `modeling.extra_classes` 暴露，`scripts/predict.py` 在调用 `run_predict` 前即根据该全局变量计算模型输入大小（第45-63行），此时 `extra_classes` 尚未被赋值，导致预测阶段实例化的模型与训练时的真实维度不符；`predict_ball_model` 在加载旧权重时又尝试用 `seq_len * hidden_size` 作为输入维度（`src/common.py` 第368-384行），进一步放大错配风险。
@@ -45,6 +46,7 @@
   - 优点：实现简单，避免全局状态。
   - 缺点：损失已有特征工程成果，预测效果可能下降。
 - **结论**：实施方案 A，补充 checkpoint 元数据与加载流程，优先保证模型成功复现训练态。
+- **进展**：`run_predict` 现于内部创建数据集后再依据 `modeling.extra_classes` 推导输入维度，并由 `predict_ball_model` 在加载 checkpoint 时复用该配置，消除 CLI 计算维度与真实模型不一致的问题。
 
 ### 2.3 全局状态耦合导致流程不透明（中）
 - **表现**：`src/common.py` 中的 `ori_data`、`pred_key_d`、`mini_args`、`extra_classes` 等均为模块级变量，训练与预测脚本通过隐式副作用共享状态，增加复现难度，也使得并行运行多彩种或多窗口时容易出现数据串扰。
