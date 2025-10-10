@@ -178,9 +178,30 @@ def load_model(m_args, syspath, sub_name_eng, model, optimizer, lr_scheduler, sc
             except Exception:
                 pass
         if args.init != 1:
-            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-            lr_scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
-            scaler.load_state_dict(checkpoint['scaler_state_dict'])
+            # 兼容旧版本 checkpoint：若缺少优化器/调度器/Scaler 状态，则跳过并告警
+            if 'optimizer_state_dict' in checkpoint:
+                try:
+                    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+                except Exception as e:
+                    logger.warning(f"加载 optimizer_state_dict 失败，将跳过此项: {e}")
+            else:
+                logger.warning("checkpoint 缺少 optimizer_state_dict，已跳过加载")
+
+            if 'scheduler_state_dict' in checkpoint:
+                try:
+                    lr_scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+                except Exception as e:
+                    logger.warning(f"加载 scheduler_state_dict 失败，将跳过此项: {e}")
+            else:
+                logger.warning("checkpoint 缺少 scheduler_state_dict，已跳过加载")
+
+            if 'scaler_state_dict' in checkpoint:
+                try:
+                    scaler.load_state_dict(checkpoint['scaler_state_dict'])
+                except Exception as e:
+                    logger.warning(f"加载 scaler_state_dict 失败，将跳过此项: {e}")
+            else:
+                logger.warning("checkpoint 缺少 scaler_state_dict，已跳过加载")
             if 'epoch' in checkpoint:
                 current_epoch = checkpoint['epoch']
                 if current_epoch >= model_args[args.name]["model_args"]["{}_epochs".format(sub_name_eng)] - 1:
