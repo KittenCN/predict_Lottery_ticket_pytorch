@@ -537,6 +537,7 @@ def main():
     
     # reuse get_args to parse and for testability
     args = get_args()
+    logger.info(f"已解析命令行参数: name={args.name}, seq_len={args.seq_len}, model={args.model}, epochs={args.epochs}, red_epochs={args.red_epochs}, blue_epochs={args.blue_epochs}")
     # ensure DEFAULT_PIPELINE has current args
     DEFAULT_PIPELINE.set_args(args)
     
@@ -611,5 +612,6 @@ def main():
     run(args.name, list_seq_len, args)
 
 
-    if __name__ == '__main__':
-        main()
+# 作为脚本直接运行时，执行 main()
+if __name__ == '__main__':
+    main()
