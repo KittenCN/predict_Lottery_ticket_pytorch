@@ -3,6 +3,7 @@ __pycache__/
 model/
 data/
 data_cache/
+results/
 *.py[cod]
 *$py.class
 *.csv
