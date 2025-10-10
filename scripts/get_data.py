@@ -11,6 +11,8 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from src.common import get_data_run
+from src.pipeline import DEFAULT_PIPELINE
+from scripts.check_pipeline_init import require_pipeline_args
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--name', default="kl8", type=str, help="选择爬取数据")
@@ -22,6 +24,9 @@ def main():
     if not args.name:
         raise Exception("玩法名称不能为空！")
     else:
+        if DEFAULT_PIPELINE.args is None:
+            DEFAULT_PIPELINE.set_args(args)
+        require_pipeline_args()
         get_data_run(name=args.name, cq=args.cq)
 
 if __name__ == "__main__":

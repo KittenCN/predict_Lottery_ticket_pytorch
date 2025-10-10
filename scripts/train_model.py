@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from src import modeling
 from src.common import create_train_data, get_data_run, to_multi_hot
-from src.pipeline import LotteryPipeline
+from src.pipeline import DEFAULT_PIPELINE
 from src.config import *
 from src.common import init
 from loguru import logger
@@ -29,40 +29,48 @@ from prefetch_generator import BackgroundGenerator
 from torch.amp import GradScaler, autocast
 from torch.utils.tensorboard import SummaryWriter   # to print to tensorboard
 
-parser = argparse.ArgumentParser()
-parser.add_argument('--name', default="kl8", type=str, help="选择训练数据")
-parser.add_argument('--seq_len', default='5', type=str, help="训练窗口大小,如有多个，用'，'隔开")
-parser.add_argument('--red_epochs', default=100, type=int, help="红球训练轮数")
-parser.add_argument('--blue_epochs', default=1, type=int, help="蓝球训练轮数")
-parser.add_argument('--batch_size', default=32, type=int, help="集合数量")
-parser.add_argument('--predict_pro', default=0, type=int, help="更新batch_size")
-parser.add_argument('--epochs', default=1, type=int, help="训练轮数(红蓝球交叉训练)")
-parser.add_argument('--cq', default=0, type=int, help="是否使用出球顺序，0：不使用（即按从小到大排序），1：使用")
-parser.add_argument('--download_data', default=1, type=int, help="是否下载数据")
-parser.add_argument('--hidden_size', default=2560, type=int, help="hidden_size")
-parser.add_argument('--num_layers', default=6, type=int, help="num_layers")
-parser.add_argument('--num_heads', default=8, type=int, help="num_heads")
-parser.add_argument('--tensorboard', default=0, type=int, help="tensorboard switch")
-parser.add_argument('--num_workers', default=0, type=int, help="num_workers switch")
-parser.add_argument('--top_k', default=10, type=int, help="top_k switch")
-parser.add_argument('--model', default='Transformer', type=str, help="model name")
-parser.add_argument('--lr', default=0.01, type=float, help="learning rate")
-parser.add_argument('--plus_mode', default=0, type=int, help="plus mode")
-parser.add_argument('--ext_times', default=1000, type=int, help="ext_times")
-parser.add_argument('--init', default=0, type=int, help="init")
-parser.add_argument('--train_mode', default=0, type=int, help="0: mormal, 1: new trainning, 2: best test model, 3: best loss model")
-parser.add_argument('--split_time', default=2021351, type=int, help="tranning data split time, greater than 0, will saving best test model")
-parser.add_argument('--save_best_loss', default=0, type=int, help="save best loss model")
-parser.add_argument('--cpu', default=0, type=int, help="using cpu, 1: cpu, 0: checking gpu")
-args = parser.parse_args()
+def get_args(argv=None):
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--name', default="kl8", type=str, help="选择训练数据")
+    parser.add_argument('--seq_len', default='5', type=str, help="训练窗口大小,如有多个，用'，'隔开")
+    parser.add_argument('--red_epochs', default=100, type=int, help="红球训练轮数")
+    parser.add_argument('--blue_epochs', default=1, type=int, help="蓝球训练轮数")
+    parser.add_argument('--batch_size', default=32, type=int, help="集合数量")
+    parser.add_argument('--predict_pro', default=0, type=int, help="更新batch_size")
+    parser.add_argument('--epochs', default=1, type=int, help="训练轮数(红蓝球交叉训练)")
+    parser.add_argument('--cq', default=0, type=int, help="是否使用出球顺序，0：不使用（即按从小到大排序），1：使用")
+    parser.add_argument('--download_data', default=1, type=int, help="是否下载数据")
+    parser.add_argument('--hidden_size', default=2560, type=int, help="hidden_size")
+    parser.add_argument('--num_layers', default=6, type=int, help="num_layers")
+    parser.add_argument('--num_heads', default=8, type=int, help="num_heads")
+    parser.add_argument('--tensorboard', default=0, type=int, help="tensorboard switch")
+    parser.add_argument('--num_workers', default=0, type=int, help="num_workers switch")
+    parser.add_argument('--top_k', default=10, type=int, help="top_k switch")
+    parser.add_argument('--model', default='Transformer', type=str, help="model name")
+    parser.add_argument('--lr', default=0.01, type=float, help="learning rate")
+    parser.add_argument('--plus_mode', default=0, type=int, help="plus mode")
+    parser.add_argument('--ext_times', default=1000, type=int, help="ext_times")
+    parser.add_argument('--init', default=0, type=int, help="init")
+    parser.add_argument('--train_mode', default=0, type=int, help="0: mormal, 1: new trainning, 2: best test model, 3: best loss model")
+    parser.add_argument('--split_time', default=2021351, type=int, help="tranning data split time, greater than 0, will saving best test model")
+    parser.add_argument('--save_best_loss', default=0, type=int, help="save best loss model")
+    parser.add_argument('--cpu', default=0, type=int, help="using cpu, 1: cpu, 0: checking gpu")
+    return parser.parse_args(argv)
+
 
 warnings.filterwarnings('ignore')
-if args.cpu == 0:
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-else:
-    device = torch.device("cpu")
+
+# device, writer and model type are initialized in main() after args are parsed
+device = None
+writer = None
+_model = None
+
+from scripts.check_pipeline_init import require_pipeline_args
 
 pred_key = {}
+
+
+# We prefer explicit args injection. Remove module-level args proxy.
 save_epoch = 50
 save_interval = 60
 last_save_time = time.time()
@@ -75,18 +83,9 @@ red_test_data = None
 blue_train_data = None
 blue_test_data = None
 
-# Pipeline instance (initialized lazily)
-_PIPELINE = None
+# Use DEFAULT_PIPELINE singleton directly
 
-if args.tensorboard == 1:
-    if not os.path.exists('../tf-logs'):
-        os.makedirs('../tf-logs')
-    writer = SummaryWriter('../tf-logs')
-
-if args.model == "Transformer":
-    _model = modeling.Transformer_Model
-elif args.model == "LSTM":
-    _model = modeling.LSTM_Model
+# tensorboard and model type are set in main() after args parsing
 
 class DataLoaderX(DataLoader):
     def __iter__(self):
@@ -94,7 +93,7 @@ class DataLoaderX(DataLoader):
 
 
 # use to_multi_hot from src.common
-def save_model(model, optimizer, lr_scheduler, scaler, epoch, syspath, ball_model_name, other="", no_update_times=0):
+def save_model(model, optimizer, lr_scheduler, scaler, epoch, syspath, ball_model_name, args, other="", no_update_times=0):
     model_state_dict = model.state_dict()
     optimizer_state_dict = optimizer.state_dict()
     scheduler_state_dict = lr_scheduler.state_dict() 
@@ -119,7 +118,7 @@ def save_model(model, optimizer, lr_scheduler, scaler, epoch, syspath, ball_mode
     }
     torch.save(save_dict, "{}{}_pytorch_{}{}.{}".format(syspath, ball_model_name, args.model, other, extension))
 
-def load_model(m_args, syspath, sub_name_eng, model, optimizer, lr_scheduler, scaler, sub_name="红球", other=""):
+def load_model(m_args, syspath, sub_name_eng, model, optimizer, lr_scheduler, scaler, args, sub_name="红球", other=""):
     global best_score, start_dt, best_loss
     _test_list = []
     current_epoch = 0
@@ -206,7 +205,7 @@ def load_model(m_args, syspath, sub_name_eng, model, optimizer, lr_scheduler, sc
         logger.info("没有找到{}模型，将重新训练！".format(sub_name))
     return current_epoch, no_update_times, split_time, _test_list
 
-def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
+def train_ball_model(name, dataset, test_dataset, args, sub_name="红球"):
     """ 模型训练
     :param name: 玩法
     :param x_data: 训练样本
@@ -281,7 +280,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
         elif args.train_mode == 0:
             logger.info("系统将尝试读取最后版本继续训练！")
         current_epoch, no_update_times, split_time, _test_list = load_model(m_args, syspath, sub_name_eng, model, optimizer, 
-                                                                            lr_scheduler, scaler, sub_name, other=_other)
+                                            lr_scheduler, scaler, args, sub_name, other=_other)
     else:
         logger.info("系统将重新训练！")
     if split_time != args.split_time or (split_time < 0 and set(_test_list) != set(test_list) and len(_test_list) > 0):
@@ -337,10 +336,10 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
             print()
             no_update_times = 0
             if args.save_best_loss == 0:
-                _, _, _, _ = load_model(m_args, syspath, sub_name_eng, model, optimizer, lr_scheduler, scaler, sub_name, 
+                _, _, _, _ = load_model(m_args, syspath, sub_name_eng, model, optimizer, lr_scheduler, scaler, args, sub_name, 
                                         other="_{}_{}".format(start_dt, "best_test"))
             else:
-                _, _, _, _ = load_model(m_args, syspath, sub_name_eng, model, optimizer, lr_scheduler, scaler, sub_name, 
+                _, _, _, _ = load_model(m_args, syspath, sub_name_eng, model, optimizer, lr_scheduler, scaler, args, sub_name, 
                                         other="_{}_{}".format(start_dt, "best_loss"))
         if epoch == current_epoch:
             pbar.update(current_epoch)
@@ -373,7 +372,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
         if (epoch + 1) % save_epoch == 0:
             if time.time() - last_save_time > save_interval:
                 last_save_time = time.time()
-                save_model(model, optimizer, lr_scheduler, scaler, epoch, syspath, ball_model_name, no_update_times=no_update_times)
+                save_model(model, optimizer, lr_scheduler, scaler, epoch, syspath, ball_model_name, args, no_update_times=no_update_times)
             if args.split_time != 0 and test_dataset is not None and  test_dataset.__len__() > 0:
                 # run test
                 model.eval()
@@ -423,16 +422,16 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
                 if top_loss < best_score:
                     no_update_times = 0
                     best_score = top_loss
-                    save_model(model, optimizer, lr_scheduler, scaler, epoch, syspath, ball_model_name, 
+                    save_model(model, optimizer, lr_scheduler, scaler, epoch, syspath, ball_model_name, args,
                                other="_{}_{}".format(start_dt, "best_test"), no_update_times=no_update_times)
                 if topk_loss < best_score:
                     no_update_times = 0
                     best_score = topk_loss
-                    save_model(model, optimizer, lr_scheduler, scaler, epoch, syspath, ball_model_name, 
+                    save_model(model, optimizer, lr_scheduler, scaler, epoch, syspath, ball_model_name, args,
                                other="_{}_{}".format(start_dt, "best_test"), no_update_times=no_update_times)
             if args.save_best_loss > 0 and best_loss > running_loss / (running_times if running_times > 0 else 1):
                 best_loss = running_loss / (running_times if running_times > 0 else 1)
-                save_model(model, optimizer, lr_scheduler, scaler, epoch, syspath, ball_model_name, 
+                save_model(model, optimizer, lr_scheduler, scaler, epoch, syspath, ball_model_name, args,
                            other="_{}_{}".format(start_dt, "best_loss"), no_update_times=no_update_times)
         if args.tensorboard == 1:
             writer.add_scalar('Loss/Running', running_loss / (running_times if running_times > 0 else 1), epoch)
@@ -453,7 +452,7 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
         pbar.update(1)
     if args.tensorboard == 1:
         writer.close()
-    save_model(model, optimizer, lr_scheduler, scaler, epoch, syspath, ball_model_name, other="_{}".format(start_dt), no_update_times=no_update_times)
+    save_model(model, optimizer, lr_scheduler, scaler, epoch, syspath, ball_model_name, args, other="_{}".format(start_dt), no_update_times=no_update_times)
     pbar.set_description("AL:{:.2e} TL:{:.2e} BL:{:.2e} KL{}:{:.2e} KL:{:.2e} LR:{:.2e} HS:{:.2e}".format(
                         running_loss / (running_times if running_times > 0 else 1), 
                         test_loss / (test_times if test_times > 0 else 1), 
@@ -468,16 +467,14 @@ def train_ball_model(name, dataset, test_dataset, sub_name="红球"):
     print()
     logger.info("【{}】{}模型训练完成!".format(name_path[name]["name"], sub_name))
 
-def action(name):
-    global best_score, test_list, red_train_data, red_test_data, blue_train_data, blue_test_data
+def action(name, args):
+    global best_score, test_list, red_train_data, red_test_data, blue_train_data, blue_test_data, best_loss
     logger.info("正在创建【{}】数据集...".format(name_path[name]["name"]))
     if args.split_time < 0 and len(test_list) <= 0:
         logger.info("抽取测试数据...")
-        ori_data = None
-        if args.cq == 1 and name == "kl8":
-            ori_data = pd.read_csv("{}{}".format(name_path[name]["path"], data_cq_file_name))
-        else:
-            ori_data = pd.read_csv("{}{}".format(name_path[name]["path"], data_file_name))
+        # use pipeline to load and cache original dataframe
+        DEFAULT_PIPELINE.set_args(args)
+        ori_data = DEFAULT_PIPELINE.get_ori_data(name, cq=args.cq)
         n = -1 * args.split_time
         if n <= 100:
             n_samples = int(len(ori_data['期数'].unique()) * n / 100)
@@ -491,25 +488,22 @@ def action(name):
             for item in range(int(ori_data[ori_data['期数'] == test_list[0]]['Unnamed: 0']) - 1, int(ori_data[ori_data['期数'] == test_list[0]]['Unnamed: 0']) - _n_samples, -1):
                 test_list.append(int(ori_data[ori_data['Unnamed: 0'] == item]['期数']))
     # name, windows, dataset=0, ball_type="red", cq=0, test_flag=0, test_begin=2021351, f_data=0, model="Transformer"
-    global _PIPELINE
-    if _PIPELINE is None:
-        _PIPELINE = LotteryPipeline()
-        _PIPELINE.set_args(args)
-    red_train_data = _PIPELINE.create_dataset(name=args.name, windows=model_args[name]["model_args"]["seq_len"], 
-                                               dataset=1, ball_type="red", cq=args.cq, test_flag=0, test_begin=args.split_time, 
-                                               f_data=0, model=args.model, num_classes=model_args[name]["model_args"]["red_n_class"], test_list=test_list)
+    DEFAULT_PIPELINE.set_args(args)
+    red_train_data = DEFAULT_PIPELINE.create_dataset(name=args.name, windows=model_args[name]["model_args"]["seq_len"], 
+                                                    dataset=1, ball_type="red", cq=args.cq, test_flag=0, test_begin=args.split_time, 
+                                                    f_data=0, model=args.model, num_classes=model_args[name]["model_args"]["red_n_class"], test_list=test_list)
     if args.split_time != 0:
-        red_test_data = _PIPELINE.create_dataset(name=args.name, windows=model_args[name]["model_args"]["seq_len"], dataset=1, ball_type="red", cq=args.cq, test_flag=1, test_begin=args.split_time, f_data=0, model=args.model, num_classes=model_args[name]["model_args"]["red_n_class"], test_list=test_list)
+        red_test_data = DEFAULT_PIPELINE.create_dataset(name=args.name, windows=model_args[name]["model_args"]["seq_len"], dataset=1, ball_type="red", cq=args.cq, test_flag=1, test_begin=args.split_time, f_data=0, model=args.model, num_classes=model_args[name]["model_args"]["red_n_class"], test_list=test_list)
     if name not in ["kl8"]:
-        blue_train_data = _PIPELINE.create_dataset(name=args.name, windows=model_args[name]["model_args"]["seq_len"], dataset=1, ball_type="blue", cq=args.cq, test_flag=0, test_begin=args.split_time, f_data=0, model=args.model, num_classes=model_args[name]["model_args"]["blue_n_class"], test_list=test_list)
+        blue_train_data = DEFAULT_PIPELINE.create_dataset(name=args.name, windows=model_args[name]["model_args"]["seq_len"], dataset=1, ball_type="blue", cq=args.cq, test_flag=0, test_begin=args.split_time, f_data=0, model=args.model, num_classes=model_args[name]["model_args"]["blue_n_class"], test_list=test_list)
         if args.split_time != 0:
-            blue_test_data = _PIPELINE.create_dataset(name=args.name, windows=model_args[name]["model_args"]["seq_len"], dataset=1, ball_type="blue", cq=args.cq, test_flag=1, test_begin=args.split_time, f_data=0, model=args.model, num_classes=model_args[name]["model_args"]["blue_n_class"], test_list=test_list)
+            blue_test_data = DEFAULT_PIPELINE.create_dataset(name=args.name, windows=model_args[name]["model_args"]["seq_len"], dataset=1, ball_type="blue", cq=args.cq, test_flag=1, test_begin=args.split_time, f_data=0, model=args.model, num_classes=model_args[name]["model_args"]["blue_n_class"], test_list=test_list)
     for i in range(args.epochs):
         if model_args[name]["model_args"]["red_epochs"] > 0:
             best_score = 999999999
             logger.info("开始训练【{}】红球模型...".format(name_path[name]["name"]))
             start_time = time.time()
-            train_ball_model(name, dataset=red_train_data, test_dataset=red_test_data, sub_name="红球")
+            train_ball_model(name, dataset=red_train_data, test_dataset=red_test_data, args=args, sub_name="红球")
             logger.info("训练耗时: {:.4f}".format(time.time() - start_time))
 
         if name not in ["pls", "kl8"] and model_args[name]["model_args"]["blue_epochs"] > 0:
@@ -517,110 +511,52 @@ def action(name):
             logger.info("开始训练【{}】蓝球模型...".format(name_path[name]["name"]))
             start_time = time.time()
             # train_blue_ball_model(name, x_data=train_data["blue"]["x_data"], y_data=train_data["blue"]["y_data"])
-            train_ball_model(name, dataset=blue_train_data, test_dataset=blue_test_data, sub_name="蓝球")
+            train_ball_model(name, dataset=blue_train_data, test_dataset=blue_test_data, args=args, sub_name="蓝球")
             logger.info("训练耗时: {:.4f}".format(time.time() - start_time))
 
 
-def run(name, seq_len):
+def run(name, seq_len, args):
     """ 执行训练
     :param name: 玩法
     :return:
     """
     total_start_time = time.time()
     if int(seq_len[0]) == 0:
-        action(name)
+        action(name, args)
     else:
         for size in seq_len:
             model_args[name]["model_args"]["seq_len"] = int(size)
-            action(name)
+            action(name, args)
     logger.info("训练总耗时: {:.4f}".format(time.time() - total_start_time))
 
-if __name__ == '__main__':
-    # reset global state to avoid cross-run contamination
-    init()
-    list_seq_len = args.seq_len.split(",")
-    if not args.name:
-        raise Exception("玩法名称不能为空！")
-    elif not args.seq_len:
-        raise Exception("窗口大小不能为空！")
-    else:
-        if args.download_data == 1 and args.predict_pro == 0 and int(time.strftime("%H", time.localtime())) < 20:
-            logger.info("正在创建【{}】数据集...".format(name_path[args.name]["name"]))
-            get_data_run(name=args.name, cq=args.cq)
-        model_args[args.name]["model_args"]["red_epochs"] = int(args.red_epochs)
-        model_args[args.name]["model_args"]["blue_epochs"] = int(args.blue_epochs)
-        model_args[args.name]["model_args"]["batch_size"] = int(args.batch_size)
-        if args.predict_pro == 1:
-            list_seq_len = []
-            path = model_path + model_args[args.name]["pathname"]['name']
-            dbtype_list = os.listdir(path)
-            for dbtype in dbtype_list:
-                try:
-                    list_seq_len.append(int(dbtype))
-                except:
-                    pass
-            if len(list_seq_len) == 0:
-                raise Exception("没有找到训练模型！")
-            list_seq_len.sort(reverse=True)   
-            logger.info(path)
-            logger.info("seq_len: {}".format(list_seq_len))
-            model_args[args.name]["model_args"]["red_epochs"] = 1
-            model_args[args.name]["model_args"]["blue_epochs"] = 1
-            model_args[args.name]["model_args"]["batch_size"] = 1
-        else:
-            if args.epochs > 1:
-                model_args[args.name]["model_args"]["red_epochs"] = 1
-                model_args[args.name]["model_args"]["blue_epochs"] = 1
-            elif args.epochs <= 0:
-                raise Exception("训练轮数不能小于1！")
-            if list_seq_len[0] == "-1":
-                list_seq_len = []
-                path = model_path + model_args[args.name]["pathname"]['name']
-                dbtype_list = os.listdir(path)
-                for dbtype in dbtype_list:
-                    try:
-                        list_seq_len.append(int(dbtype))
-                    except:
-                        pass
-                if len(list_seq_len) == 0:
-                    raise Exception("没有找到训练模型！")
-                list_seq_len.sort(reverse=True)   
-                logger.info(path)
-                logger.info("seq_len: {}".format(list_seq_len))
-        run(args.name, list_seq_len)
+
 
 def main():
     """主函数 - 供setup.py调用"""
-    global args
-    # 重新解析参数以支持控制台命令
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--name', default="kl8", type=str, help="选择训练数据")
-    parser.add_argument('--seq_len', default='5', type=str, help="训练窗口大小,如有多个，用'，'隔开")
-    parser.add_argument('--red_epochs', default=100, type=int, help="红球训练轮数")
-    parser.add_argument('--blue_epochs', default=1, type=int, help="蓝球训练轮数")
-    parser.add_argument('--batch_size', default=32, type=int, help="集合数量")
-    parser.add_argument('--predict_pro', default=0, type=int, help="更新batch_size")
-    parser.add_argument('--epochs', default=1, type=int, help="训练轮数(红蓝球交叉训练)")
-    parser.add_argument('--cq', default=0, type=int, help="是否使用出球顺序，0：不使用（即按从小到大排序），1：使用")
-    parser.add_argument('--download_data', default=1, type=int, help="是否下载数据")
-    parser.add_argument('--hidden_size', default=2560, type=int, help="hidden_size")
-    parser.add_argument('--num_layers', default=6, type=int, help="num_layers")
-    parser.add_argument('--num_heads', default=8, type=int, help="num_heads")
-    parser.add_argument('--tensorboard', default=0, type=int, help="tensorboard switch")
-    parser.add_argument('--num_workers', default=0, type=int, help="num_workers switch")
-    parser.add_argument('--top_k', default=10, type=int, help="top_k switch")
-    parser.add_argument('--model', default='Transformer', type=str, help="model name")
-    parser.add_argument('--lr', default=0.01, type=float, help="learning rate")
-    parser.add_argument('--plus_mode', default=0, type=int, help="plus mode")
-    parser.add_argument('--ext_times', default=1000, type=int, help="ext_times")
-    parser.add_argument('--init', default=0, type=int, help="init")
-    parser.add_argument('--train_mode', default=0, type=int, help="0: mormal, 1: new trainning, 2: best test model, 3: best loss model")
-    parser.add_argument('--split_time', default=2021351, type=int, help="tranning data split time, greater than 0, will saving best test model")
-    parser.add_argument('--save_best_loss', default=0, type=int, help="save best loss model")
-    parser.add_argument('--cpu', default=0, type=int, help="using cpu, 1: cpu, 0: checking gpu")
-    args = parser.parse_args()
-    # reset global state to avoid cross-run contamination
-    init()
+    global device, writer, _model
+    
+    # reuse get_args to parse and for testability
+    args = get_args()
+    # ensure DEFAULT_PIPELINE has current args
+    DEFAULT_PIPELINE.set_args(args)
+    
+    # Initialize device based on args
+    if args.cpu == 0:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    else:
+        device = torch.device("cpu")
+    
+    # Initialize tensorboard writer if enabled
+    if args.tensorboard == 1:
+        if not os.path.exists('../tf-logs'):
+            os.makedirs('../tf-logs')
+        writer = SummaryWriter('../tf-logs')
+    
+    # Initialize model type based on args
+    if args.model == "Transformer":
+        _model = modeling.Transformer_Model
+    elif args.model == "LSTM":
+        _model = modeling.LSTM_Model
     
     # 执行原来的主逻辑
     list_seq_len = args.seq_len.split(",")
@@ -672,4 +608,8 @@ def main():
                 list_seq_len.sort(reverse=True)   
                 logger.info(path)
                 logger.info("seq_len: {}".format(list_seq_len))
-        run(args.name, list_seq_len)
+    run(args.name, list_seq_len, args)
+
+
+    if __name__ == '__main__':
+        main()

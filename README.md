@@ -79,14 +79,35 @@ pytest tests/test_smoke_integration.py -q
 示例：
 
 ```python
-from src.pipeline import LotteryPipeline
-pipe = LotteryPipeline()
-pipe.set_args(args)  # 可选
-ds = pipe.create_dataset('kl8', windows=5, dataset=1, ball_type='red')
+from src.pipeline import DEFAULT_PIPELINE
+# 推荐使用 DEFAULT_PIPELINE 在脚本入口注入 args，避免创建多个临时 pipeline 导致状态不一致
+DEFAULT_PIPELINE.set_args(args)
+ds = DEFAULT_PIPELINE.create_dataset('kl8', windows=5, dataset=1, ball_type='red')
 # 训练、保存
-pipe.save_checkpoint('path.ckpt', model, optimizer=opt, epoch=0)
+DEFAULT_PIPELINE.save_checkpoint('path.ckpt', model, optimizer=opt, epoch=0)
 # 加载时会自动恢复 extra_classes
-ck = pipe.load_checkpoint('path.ckpt')
+ck = DEFAULT_PIPELINE.load_checkpoint('path.ckpt')
+# 额外：你可以直接通过 DEFAULT_PIPELINE.run_predict(...) 调用预测流程，或 DEFAULT_PIPELINE.predict_ball_model(...) 调用预测子流程
+```
+
+更多 Pipeline 示例（迁移指南）:
+
+```python
+from src.pipeline import DEFAULT_PIPELINE
+# 1) 设置参数（推荐在脚本入口）
+DEFAULT_PIPELINE.set_args(args)
+
+# 2) 获取原始数据（从缓存读取，支持 refresh=True 强制刷新）
+df = DEFAULT_PIPELINE.get_ori_data('kl8', cq=0)
+
+# 3) 创建 dataset（自动使用 modeling.extra_classes）
+ds = DEFAULT_PIPELINE.create_dataset('kl8', windows=5, dataset=1, ball_type='red')
+
+# 4) 预测/保存/加载
+DEFAULT_PIPELINE.save_checkpoint('models/ckpt.ckpt', model, optimizer=opt, epoch=0)
+ck = DEFAULT_PIPELINE.load_checkpoint('models/ckpt.ckpt')
+
+# 并发/多进程提示：get_ori_data 使用内部锁与 TTL 缓存以避免并发的磁盘读取，使用 refresh=True 强制刷新。
 ```
 
 

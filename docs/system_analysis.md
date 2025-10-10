@@ -10,6 +10,10 @@
 部分已缓解但需后续跟进的项：
 - 损失函数与标签编码一致性（高风险）：训练代码已默认使用 `BCEWithLogitsLoss` 并在训练流程中将标签转换为 multi-hot（见 `scripts/train_model.py` 中 `to_multi_hot`），这已在训练路径中被使用，但建议补充更全面的单测（例如小批量前向/反向）来覆盖边界情况与 label 缺失场景。
 - 全局状态耦合：项目中仍有全局变量（`ori_data`、`mini_args`、`modeling.extra_classes` 等）。已在 checkpoint/load 流程中恢复 `extra_classes`，并在 `src.common.init()` 中提供重置函数。长期建议将这些状态封装进 Pipeline/Context 类以减少隐藏依赖。
+- 全局状态耦合（已进行中）：已逐步将模块级 `ori_data` 与 `mini_args` 的责任迁移到 `src.pipeline.LotteryPipeline`：
+  - `ori_data` 的缓存已移入 `LotteryPipeline.get_ori_data`（支持 per-key 缓存、TTL 与并发锁），默认 TTL=300s（可在 `src.config` 中配置 `ORI_DATA_TTL`）。
+  - `mini_args` 与 `setMiniargs` 已移除。所有调用方应直接使用 `src.pipeline.DEFAULT_PIPELINE.set_args(args)` 或显式将 args 传入相关函数。未设置 pipeline args 的调用将抛出错误以确保显式注入。
+  - 迁移策略：按小批次替换调用方（scripts 与模块）以使用 pipeline 单例或显式传参，运行测试以确保兼容性。已完成对 `src.common` 的主干修改，脚本 `scripts/train_model.py` 与 `scripts/predict.py` 已开始使用 pipeline。
 
 未修复的建议（需要额外工时）：
 - 将 scripts 转为可安装的 console_scripts entry points（当前通过 sys.path hack 支持）。建议发布包或使用 editable install 来简化运行环境。
@@ -33,6 +37,11 @@
 - 为训练流程添加一个小规模 smoke test（创建随机数据，做一次前向和后向传播，检查 loss 可计算且 checkpoint 无错误）。
 - 逐步重构：将全局状态注入到函数签名或 Context 对象中，移除模块级可变状态。
 - 在爬虫中引入更完善的重试策略（如 tenacity），并对关键外部域名使用配置化白名单。
+
+近期变更（2025-10-09）：
+- 新增 `src.pipeline.LotteryPipeline` 的 `run_predict` 与 `predict_ball_model` wrapper，脚本 (`scripts/predict.py`, `scripts/train_model.py`, `scripts/get_data.py`) 已开始迁移以通过 pipeline.set_args(args) 注入参数，减少对 `mini_args` 的直接依赖。
+ - 新增 `src.pipeline.LotteryPipeline` 的 `run_predict` 与 `predict_ball_model` wrapper，脚本 (`scripts/predict.py`, `scripts/train_model.py`, `scripts/get_data.py`) 已开始迁移以通过 pipeline.set_args(args) 注入参数，减少对 `mini_args` 的直接依赖。`get_ori_data` 现在实现了并发锁和 TTL 缓存，支持 `refresh=True` 强制刷新。
+- 已添加 `tests/test_pipeline.py` 验证 pipeline 的 save/load extra_classes 行为与 create_dataset 返回基本对象。
 
 更新时间: 2025-10-09
 # 项目技术分析报告

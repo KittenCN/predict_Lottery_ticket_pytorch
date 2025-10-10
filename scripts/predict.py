@@ -13,7 +13,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from src import modeling
 from src.config import *
-from src.common import setMiniargs, get_current_number, run_predict, init
+from src.common import get_current_number, run_predict, init
+from src.pipeline import DEFAULT_PIPELINE
+from scripts.check_pipeline_init import require_pipeline_args
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--name', default="kl8", type=str, help="选择训练数据")
@@ -42,8 +44,10 @@ if __name__ == '__main__':
     elif not args.seq_len:
         raise Exception("窗口大小不能为空！")
     else:
-        init()
-        setMiniargs(args)
+        # use DEFAULT_PIPELINE singleton to manage (and set) args instead of creating a local pipeline
+        if DEFAULT_PIPELINE.args is None:
+            DEFAULT_PIPELINE.set_args(args)
+        require_pipeline_args()
         list_seq_len = args.seq_len.split(",")
         if list_seq_len[0] == "-1":
             list_seq_len = []
@@ -61,16 +65,16 @@ if __name__ == '__main__':
             logger.info("seq_len: {}".format(list_seq_len))
         for size in list_seq_len:
             current_number = get_current_number(args.name)
-            # run_predict(int(size), model_args[args.name]["model_args"]['red_sequence_len'], hidden_size=args.hidden_size, num_layers=args.num_layers, num_heads=args.num_heads, input_size=model_args[args.name]["model_args"]["red_n_class"]*int(size), output_size=model_args[args.name]["model_args"]["red_n_class"], f_data=args.f_data, model=args.model)
-            # window_size, sequence_len, hidden_size=128, num_layers=8, num_heads=16, input_size=20, output_size=20, f_data=0, model="Transformer", args=None, test_mode=0
-            run_predict(
+            # call pipeline wrapper on DEFAULT_PIPELINE
+            if DEFAULT_PIPELINE.args is None:
+                DEFAULT_PIPELINE.set_args(args)
+            DEFAULT_PIPELINE.run_predict(
                 window_size=int(size),
                 hidden_size=args.hidden_size,
                 num_layers=args.num_layers,
                 num_heads=args.num_heads,
                 f_data=args.f_data,
                 model=args.model,
-                args=args,
                 test_mode=args.test_mode,
             )
 
@@ -105,8 +109,10 @@ def main():
     elif not args.seq_len:
         raise Exception("窗口大小不能为空！")
     else:
-        init()
-        setMiniargs(args)
+        # ensure DEFAULT_PIPELINE has args and use it
+        if DEFAULT_PIPELINE.args is None:
+            DEFAULT_PIPELINE.set_args(args)
+        require_pipeline_args()
         list_seq_len = args.seq_len.split(",")
         if list_seq_len[0] == "-1":
             list_seq_len = []
@@ -124,13 +130,15 @@ def main():
             logger.info("seq_len: {}".format(list_seq_len))
         for size in list_seq_len:
             current_number = get_current_number(args.name)
-            run_predict(
+            # call pipeline wrapper on DEFAULT_PIPELINE
+            if DEFAULT_PIPELINE.args is None:
+                DEFAULT_PIPELINE.set_args(args)
+            DEFAULT_PIPELINE.run_predict(
                 window_size=int(size),
                 hidden_size=args.hidden_size,
                 num_layers=args.num_layers,
                 num_heads=args.num_heads,
                 f_data=args.f_data,
                 model=args.model,
-                args=args,
                 test_mode=args.test_mode,
             )

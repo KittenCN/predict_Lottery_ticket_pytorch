@@ -129,11 +129,11 @@ def to_multi_hot(y_values, num_classes: int, device=None):
             multi_hot[i, valid_indices] = 1.0
     return multi_hot
 
-ori_data = None
+# Note: module-level `ori_data` global is deprecated. Use src.pipeline.DEFAULT_PIPELINE.get_ori_data(name, cq)
 filedata = []
 filetitle = []
 pred_key_d = {}
-mini_args = {}
+# mini_args has been removed; use src.pipeline.DEFAULT_PIPELINE.args or pass args explicitly
 
 class FocalLoss(nn.Module):
     def __init__(self, gamma=2.0, alpha=0.25):
@@ -158,15 +158,21 @@ def create_train_data(name, windows, dataset=0, ball_type="red", cq=0, test_flag
     :param windows: 训练窗口
     :return:
     """
-    global ori_data
     strflag = "训练" if test_flag == 0 else "测试"
     strball = "红球" if ball_type == "red" else "蓝球"
-    if ori_data is None:
-        if cq == 1 and name == "kl8":
-            ori_data = pd.read_csv("{}{}".format(name_path[name]["path"], data_cq_file_name))
+    # Prefer pipeline cached ori_data when available to avoid module-level globals
+    try:
+        from src.pipeline import DEFAULT_PIPELINE
+        if DEFAULT_PIPELINE is not None:
+            ori_df = DEFAULT_PIPELINE.get_ori_data(name, cq=cq)
         else:
-            ori_data = pd.read_csv("{}{}".format(name_path[name]["path"], data_file_name))
-    data = ori_data.copy()
+            raise Exception()
+    except Exception:
+        if cq == 1 and name == "kl8":
+            ori_df = pd.read_csv("{}{}".format(name_path[name]["path"], data_cq_file_name))
+        else:
+            ori_df = pd.read_csv("{}{}".format(name_path[name]["path"], data_file_name))
+    data = ori_df.copy()
     if test_begin >= 0 and len(test_list) <= 0:
         if f_data == 0:
             if test_flag in [0, 2]:
@@ -324,7 +330,14 @@ def spider_cq(name="kl8", start=1, end=999999, mode="train", seq_len=0):
         df.to_csv("{}{}".format(syspath, data_cq_file_name), encoding="utf-8",index=False)
         return pd.DataFrame(data)
     elif name == "kl8" and mode == "predict":
-        ori_data = pd.read_csv("{}{}".format(syspath, data_cq_file_name))  
+        try:
+            from src.pipeline import DEFAULT_PIPELINE
+            if DEFAULT_PIPELINE is not None:
+                ori_data = DEFAULT_PIPELINE.get_ori_data(name, cq=1)
+            else:
+                raise Exception()
+        except Exception:
+            ori_data = pd.read_csv("{}{}".format(syspath, data_cq_file_name))  
         data = []
         if seq_len > 0:
             ori_data = ori_data[0:seq_len]
@@ -418,7 +431,14 @@ def spider(name="ssq", start=1, end=999999, mode="train", seq_len=0):
         return pd.DataFrame(data)
 
     elif mode == "predict":
-        ori_data = pd.read_csv("{}{}".format(syspath, data_file_name))  
+        try:
+            from src.pipeline import DEFAULT_PIPELINE
+            if DEFAULT_PIPELINE is not None:
+                ori_data = DEFAULT_PIPELINE.get_ori_data(name, cq=0)
+            else:
+                raise Exception()
+        except Exception:
+            ori_data = pd.read_csv("{}{}".format(syspath, data_file_name))  
         data = []
         if seq_len > 0:
             ori_data = ori_data[0:seq_len]
@@ -455,27 +475,54 @@ def spider(name="ssq", start=1, end=999999, mode="train", seq_len=0):
 
 # current_number = get_current_number(mini_args.name)
 
-def setMiniargs(args):
-    global mini_args
-    mini_args = args
+# NOTE: setMiniargs has been removed. Use src.pipeline.DEFAULT_PIPELINE.set_args(args) instead.
 
 def init():
-    global mini_args,pred_key_d, filedata, filetitle
+    global pred_key_d, filedata, filetitle
     filedata = []
     filetitle = []
     pred_key_d = {}
-    mini_args = {}
 
 def predict_ball_model(name, dataset, num_classes, sub_name="红球", window_size=1, hidden_size=128, num_layers=8, num_heads=16, input_size=20, output_size=20, model_name="Transformer", args=None, device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu"), embedding_dim=50):
-    """ 预测指定球种的下一期结果 """
+    """预测指定球种的下一期结果
+
+    This function prefers an explicit `args` object; if `args` is None it will attempt
+    to delegate to a LotteryPipeline instance that has args set. Otherwise it will use
+    the global `mini_args` for backward compatibility.
+    """
+    # Prefer explicit args, otherwise prefer pipeline singleton args. Do not fall back to legacy global.
+    if args is None:
+        try:
+            from src.pipeline import DEFAULT_PIPELINE
+            if DEFAULT_PIPELINE is not None and DEFAULT_PIPELINE.args is not None:
+                cur_args = DEFAULT_PIPELINE.args
+            else:
+                raise ValueError("No args provided: call src.pipeline.DEFAULT_PIPELINE.set_args(args) or pass args explicitly")
+        except Exception:
+            raise
+    else:
+        cur_args = args
+
+    # If no explicit args provided and a pipeline exists with args, delegate to it
+    if args is None:
+        try:
+            from src.pipeline import LotteryPipeline
+
+            pipeline = LotteryPipeline()
+            if pipeline.args is not None:
+                return pipeline.predict_ball_model(name=name, dataset=dataset, num_classes=num_classes, sub_name=sub_name, window_size=window_size, hidden_size=hidden_size, num_layers=num_layers, num_heads=num_heads, input_size=input_size, output_size=output_size, model_name=model_name, device=device, embedding_dim=embedding_dim)
+        except Exception:
+            # If delegation isn't possible, continue with cur_args (which may be empty)
+            pass
+
     global last_save_time
     sub_name_eng = "red" if sub_name == "红球" else "blue"
     ball_model_name = red_ball_model_name if sub_name == "红球" else blue_ball_model_name
     m_args = model_args[name]
     ball_index = 0 if sub_name == "红球" else 1
     name_list = [(ball_name[ball_index], i + 1) for i in range(num_classes)]
-    # prefer explicit args (injected via LotteryPipeline.set_args) but fall back to global mini_args for compatibility
-    cur_args = args if args is not None else mini_args
+
+    # safe-guard: ensure model path exists
     syspath = model_path + model_args[cur_args.name]["pathname"]['name'] + str(window_size) + model_args[cur_args.name]["subpath"][sub_name_eng]
     if not os.path.exists(syspath):
         os.makedirs(syspath)
@@ -556,8 +603,15 @@ def predict_ball_model(name, dataset, num_classes, sub_name="红球", window_siz
 
 def run_predict(window_size, hidden_size=128, num_layers=8, num_heads=16, f_data=0, model="Transformer", args=None, test_mode=0):
     global pred_key_d
-    # prefer explicit args, otherwise fall back to global mini_args for backward compatibility
-    cur_args = args if args is not None else mini_args
+    # prefer explicit args, otherwise prefer pipeline singleton args. Do not fall back to legacy global.
+    if args is None:
+        from src.pipeline import DEFAULT_PIPELINE
+        if DEFAULT_PIPELINE is not None and DEFAULT_PIPELINE.args is not None:
+            cur_args = DEFAULT_PIPELINE.args
+        else:
+            raise ValueError("No args provided: call src.pipeline.DEFAULT_PIPELINE.set_args(args) or pass args explicitly")
+    else:
+        cur_args = args
     balls = ['red', 'blue'] if cur_args.name not in ["pls", "kl8"] else ['red']
     for sub_name_eng in balls:
         sub_name = "红球" if sub_name_eng == "red" else "蓝球"
@@ -638,22 +692,40 @@ def get_year():
     return int(str(datetime.datetime.now().year)[-2:])
 
 
-def try_error(name, predict_features, seq_len):
-    """ 处理异常
+def try_error(name, predict_features, seq_len, args=None):
+    """Handle missing/irregular predict_features by fetching more history.
+
+    Prefer an explicit `args` (or pipeline.args via delegation). Falls back to module-level
+    `mini_args` for backward compatibility.
     """
-    # try_error may be called in contexts where args are injected; use global mini_args as fallback
-    cur_args = mini_args
+    # prefer explicit args, otherwise prefer pipeline singleton args. Do not fall back to legacy global.
+    if args is None:
+        from src.pipeline import DEFAULT_PIPELINE
+        if DEFAULT_PIPELINE is not None and DEFAULT_PIPELINE.args is not None:
+            cur_args = DEFAULT_PIPELINE.args
+        else:
+            raise ValueError("No args provided: call src.pipeline.DEFAULT_PIPELINE.set_args(args) or pass args explicitly")
+    else:
+        cur_args = args
+    # if args not provided, try to delegate to pipeline to obtain args
+    if args is None:
+        try:
+            from src.pipeline import LotteryPipeline
+            pipeline = LotteryPipeline()
+            if pipeline.args is not None:
+                cur_args = pipeline.args
+        except Exception:
+            pass
+
     if len(predict_features) != seq_len:
         logger.warning("期号出现跳期，期号不连续！开始查找最近上一期期号！本期预测时间较久！")
         last_current_year = (get_year() - 1) * 1000
         max_times = 160
         while len(predict_features) != seq_len:
-            # predict_features = spider(name, last_current_year + max_times, get_current_number(name), "predict")[[x[0] for x in ball_name]]
-            if cur_args.cq == 0:
+            if getattr(cur_args, 'cq', 0) == 0:
                 predict_features = spider(name, last_current_year + max_times, get_current_number(name), "predict", seq_len)
             else:
                 predict_features = spider_cq(name, last_current_year + max_times, get_current_number(name), "predict", seq_len)
-            # time.sleep(np.random.random(1).tolist()[0])
             max_times -= 1
         return predict_features
     return predict_features
